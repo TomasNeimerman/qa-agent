@@ -30,7 +30,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. User can point the agent at localhost or a staging URL (passed as a base-URL parameter) and it runs HTTP requests (GET/POST/PUT/DELETE) against that target, validating status codes and response shape/errors (API-01, API-02, EXEC-04).
   3. When the agent is about to perform a destructive action (delete, payment, role/permission change, real email) via the API, it stops and requires explicit confirmation before proceeding, and the resulting report clearly distinguishes actions that were executed from actions that were blocked pending confirmation (SAFE-01, SAFE-02).
   4. After a run, the user receives a readable report showing what was tested and what passed/failed, with every verdict backed by captured evidence (HTTP request/response) and reproduction steps attached to each failing case (SAFE-03, REP-01, REP-02).
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Tracer: installable `/qa-agent` skill sends one real GET and writes an evidence-backed report
+- [ ] 01-02-PLAN.md — Destructive-action confirmation gate (script refusal + PreToolUse hook backstop)
+- [ ] 01-03-PLAN.md — Three-state evidence-quoted report with reproduction steps and chat summary
+- [ ] 01-04-PLAN.md — Full GET/POST/PUT/DELETE dispatch, shape observation, preflight and target safety
 
 ### Phase 2: Browser Execution Engine
 **Goal**: The agent can autonomously drive a real browser to execute application flows described in natural language, authenticate as a test user, and reuse that session for related API checks.
@@ -82,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
-| 1. Foundation, Guardrails & API Testing | 0/TBD | Not started | - |
+| 1. Foundation, Guardrails & API Testing | 0/4 | Planned | - |
 | 2. Browser Execution Engine | 0/TBD | Not started | - |
 | 3. Dual Discovery & Test-Case Generation | 0/TBD | Not started | - |
 | 4. Edge-Case & Input Validation Quality | 0/TBD | Not started | - |
