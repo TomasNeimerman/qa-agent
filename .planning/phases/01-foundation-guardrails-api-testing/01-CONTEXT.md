@@ -29,6 +29,10 @@ A developer can invoke the QA agent as an installed Claude Code skill and get a 
 - **D-07:** The report is delivered two ways: a summary shown in the chat, and a full Markdown file with evidence written to a local folder inside the tested project's repo (e.g. `qa-reports/`). — **Reversibility:** costly — the report file location becomes a convention the team will expect; changing it later means updating any tooling/gitignore rules built around it.
 - **D-08:** Each test case in the report includes the full request (method, URL, body) and the full response (status, body, relevant headers) — not just a status code and short message. Applies to both pass and fail cases.
 
+### Environment Variables & Validation Strictness (added after research review)
+- **D-09:** The skill uses a fixed, documented env var convention across all target projects: `QA_AGENT_TOKEN` (test-user auth token) and `QA_AGENT_BASE_URL` (optional; base URL can also be passed as a skill argument). If unset when a run needs them, the skill fails loudly with a specific "not configured" message — never proceeds with a missing/empty Authorization header.
+- **D-10:** Response-shape validation in Phase 1 is intentionally loose ("shape observed," not "contract validated"): checks status code, valid-JSON parseability, and any fields the user explicitly named in their natural-language instruction. The report must label these checks as "shape observed" rather than implying formal contract validation, since no OpenAPI/Postman spec exists yet (that's out of scope until later phases).
+
 ### Claude's Discretion
 - Exact report filename/timestamp convention inside `qa-reports/` is left to the implementer.
 - Whether `qa-reports/` needs a default `.gitignore` entry (to avoid committing test evidence to the tested project's repo) is left to the implementer's judgment — lean toward gitignoring by default since these are ephemeral run artifacts, not team-reviewed docs.
