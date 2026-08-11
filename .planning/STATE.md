@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 1
 current_phase_name: Foundation, Guardrails & API Testing
 status: executing
-stopped_at: Completed 01-01-PLAN.md (tracer slice verified end-to-end, 4/4 vitest passing)
-last_updated: "2026-08-11T12:28:13.434Z"
+stopped_at: Completed 01-02-PLAN.md (destructive-action confirmation gate, 23/23 vitest passing)
+last_updated: "2026-08-11T13:45:17.951Z"
 last_activity: 2026-08-11
 last_activity_desc: Phase 1 execution resumed (wave continue)
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 1 (Foundation, Guardrails & API Testing) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-11 — Phase 1 execution resumed (wave continue)
 
-Progress: [███░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [███░░░░░░░] 25%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 12min | 2 tasks | 8 files |
+| Phase 01 P02 | 67min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Recent decisions affecting current work:
 - [Roadmap]: API-03 (UI→API session reuse) placed in Phase 2, not Phase 1, since it depends on browser-based auth (EXEC-03) not yet existing in Phase 1.
 - [Phase ?]: Resumed 01-01 after prior-session interruption: verified all Task 2 deliverables against plan contract with zero code changes needed; 286deb6 stands as the verified task commit
 - [Phase ?]: Manual UAT check (live /qa-agent install + run against DATAX/dotax/franquix) deferred to end-of-phase per workflow.human_verify_mode=end-of-phase
+- [Phase ?]: Destructive-action gate (D-01–D-04): mechanical classifier + api-client.mjs exit-3 refusal (primary block) plus PreToolUse hook escalation (hardening layer, deliberately ignores caller's own --confirmed)
+- [Phase ?]: Extended shared mock-server.mjs test fixture with a request log (GET /__requests, POST /__reset) to support 'zero HTTP requests' assertions required by the plan's own test behavior
+- [Phase ?]: RESEARCH Assumption A2 (skill-scoped hooks: frontmatter) verified live against code.claude.com docs this session and confirmed correct — upgraded from LOW confidence to confirmed
 
 ### Pending Todos
 
@@ -93,6 +97,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-11T12:28:13.425Z
-Stopped at: Completed 01-01-PLAN.md (tracer slice verified end-to-end, 4/4 vitest passing)
+Last session: 2026-08-11T13:45:17.941Z
+Stopped at: Completed 01-02-PLAN.md (destructive-action confirmation gate, 23/23 vitest passing)
 Resume file: None

@@ -9,8 +9,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Safety & Guardrails
 
-- [ ] **SAFE-01**: El agente nunca ejecuta una acción destructiva (delete, pago, cambio de rol/permiso, envío de email real) sin confirmación explícita del usuario en ese momento
-- [ ] **SAFE-02**: El agente distingue y marca claramente en el reporte qué acciones fueron ejecutadas vs. bloqueadas por requerir confirmación
+- [x] **SAFE-01**: El agente nunca ejecuta una acción destructiva (delete, pago, cambio de rol/permiso, envío de email real) sin confirmación explícita del usuario en ese momento
+- [x] **SAFE-02**: El agente distingue y marca claramente en el reporte qué acciones fueron ejecutadas vs. bloqueadas por requerir confirmación
 - [x] **SAFE-03**: Cada veredicto de pass/fail queda respaldado por evidencia capturada en el momento (screenshot, respuesta HTTP, snapshot del DOM) — no hay veredictos sin evidencia adjunta
 
 ### Execution Engine (UI)
@@ -80,8 +80,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | Phase 1 | Pending |
-| SAFE-02 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Complete |
+| SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 1 | Complete |
 | EXEC-01 | Phase 2 | Pending |
 | EXEC-02 | Phase 2 | Pending |
