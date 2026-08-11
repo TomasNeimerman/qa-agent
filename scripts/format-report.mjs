@@ -6,9 +6,9 @@
 // enforcement. Blocked (pending-confirmation) cases are exempt: a null
 // response is the correct, expected shape for an action that was never sent.
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 export class EvidenceMissingError extends Error {}
 
@@ -318,7 +318,18 @@ async function main() {
   process.exit(0);
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+// See api-client.mjs for why this resolves realpaths before comparing —
+// a plain URL/string comparison breaks under the documented symlink/junction
+// install method (README "Installation").
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+const isMain = isMainModule();
 if (isMain) {
   main().catch((err) => {
     process.stderr.write(`${err.stack ?? err.message}\n`);

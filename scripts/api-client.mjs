@@ -26,9 +26,9 @@
 // request. Widening the method set (this plan) or adding new checks later
 // must preserve this order, not add a bypass around any earlier step.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { request } from 'playwright';
 import { z } from 'zod';
@@ -544,7 +544,20 @@ async function main() {
   process.exit(0);
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+// Resolve both sides through realpathSync before comparing — a plain URL/string
+// comparison breaks when the skill is invoked through a symlink or Windows
+// junction (the documented install method, README "Installation"), because
+// Node resolves import.meta.url to the link's real target while
+// process.argv[1] keeps the literal invoked path.
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+const isMain = isMainModule();
 if (isMain) {
   main().catch((err) => {
     process.stderr.write(`${err.stack ?? err.message}\n`);
