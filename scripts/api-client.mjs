@@ -31,6 +31,7 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { request } from 'playwright';
+import { z } from 'zod';
 import { previewOf, requiresConfirmation } from './destructive.mjs';
 
 export const RESULTS_SCHEMA_VERSION = 1;
@@ -105,11 +106,42 @@ export function readConfig({ baseUrlArg, projectRoot } = {}) {
 }
 
 /**
+ * Builds a loose zod schema for "shape observed" validation (D-05, D-10).
+ * With no field names, returns `z.unknown()` — with no specification to be
+ * strict against, there is nothing to check beyond JSON-parseability. With
+ * names, returns an object schema requiring exactly those fields (each typed
+ * `z.unknown()`, so the field's own value is never judged) while tolerating
+ * any other unnamed key — zod object schemas ignore unrecognised keys by
+ * default, and Phase 1 has no OpenAPI/Postman source to be strict against
+ * (RESEARCH pitfall 4). Never call `.strict()` here: an extra key the
+ * developer never mentioned must never fail this check. This is a hint
+ * inferred from one observed response, not ground truth — the report labels
+ * every check built from this schema "shape observed", never "contract
+ * validated".
+ */
+export function buildShapeSchema(fieldNames = []) {
+  if (!fieldNames || fieldNames.length === 0) {
+    return z.unknown();
+  }
+  const shape = Object.fromEntries(fieldNames.map((name) => [name, z.unknown()]));
+  return z.object(shape);
+}
+
+/**
  * Dispatches a single deterministic HTTP call via Playwright's APIRequestContext,
  * captures full request+response evidence (headers redacted), and returns the
  * case object shaped per the results.json contract.
  */
-export async function runCase({ method, url, title, body, baseUrl, token, expectStatus }) {
+export async function runCase({
+  method,
+  url,
+  title,
+  body,
+  baseUrl,
+  token,
+  expectStatus,
+  expectFields,
+}) {
   const m = String(method ?? '').toUpperCase();
   const dispatchKey = DISPATCH[m];
   if (!dispatchKey) {
@@ -168,6 +200,21 @@ export async function runCase({ method, url, title, body, baseUrl, token, expect
         passed: isJson,
       },
     ];
+
+    const fieldNames = Array.isArray(expectFields) ? expectFields.filter(Boolean) : [];
+    if (fieldNames.length > 0) {
+      const result = buildShapeSchema(fieldNames).safeParse(parsedBody);
+      const actual = result.success
+        ? 'all present'
+        : result.error.issues.map((issue) => issue.path.join('.')).join(', ') || 'shape mismatch';
+      checks.push({
+        name: `fields present: ${fieldNames.join(', ')}`,
+        kind: 'shape-observed',
+        expected: fieldNames,
+        actual,
+        passed: result.success,
+      });
+    }
 
     const allPassed = checks.every((c) => c.passed);
 
@@ -261,7 +308,14 @@ async function main() {
   const url = args.url ?? '/';
   const title = args.title;
   const body = args.body !== undefined ? JSON.parse(args.body) : undefined;
-  const expectStatus = args['expect-status'];
+  const expectStatus = args['expect-status'] !== undefined ? Number(args['expect-status']) : undefined;
+  const expectFields =
+    typeof args['expect-fields'] === 'string'
+      ? args['expect-fields']
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
   const resultsPath = args.results ? resolve(args.results) : resolve(projectRoot, 'results.json');
   const confirmed = Boolean(args.confirmed);
   const declined = Boolean(args.declined);
@@ -339,6 +393,7 @@ async function main() {
       baseUrl: config.baseUrl,
       token: config.token,
       expectStatus,
+      expectFields,
     });
   } catch (err) {
     process.stderr.write(`${err.message}\n`);
