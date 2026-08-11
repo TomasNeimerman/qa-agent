@@ -3,9 +3,12 @@
 // (passed/failed/blocked) rendering, and evidence enforcement (SAFE-03).
 // Fixtures are hand-built so no HTTP or filesystem target is required.
 
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   EvidenceMissingError,
+  chatSummary,
+  deriveReproSteps,
   renderCase,
   renderReport,
   reportFileName,
@@ -214,5 +217,101 @@ describe('renderCase (direct)', () => {
   it('renders a single passed case section given an index', () => {
     const section = renderCase(passedCase(), 1);
     expect(section).toContain('## Case 1 — GET /api/clients — PASSED');
+  });
+});
+
+describe('deriveReproSteps', () => {
+  it('for a failed POST case, returns at least three steps: method+absolute URL, request body, observed vs expected status', () => {
+    const run = { baseUrl: 'http://localhost:3000' };
+    const steps = deriveReproSteps(failedCase(), run);
+    expect(steps.length).toBeGreaterThanOrEqual(3);
+    expect(steps[0]).toContain('POST');
+    expect(steps[0]).toContain('http://localhost:3000/api/clients');
+    expect(steps.some((s) => s.includes('email'))).toBe(true);
+    expect(steps.some((s) => s.includes('500') && s.includes('400'))).toBe(true);
+  });
+
+  it('references the token only by env var name, never a real token value', () => {
+    const c = failedCase();
+    c.evidence.request.headers = { Authorization: 'Bearer super-secret-fixture-token' };
+    const steps = deriveReproSteps(c, { baseUrl: 'http://localhost:3000' });
+    const joined = steps.join('|');
+    expect(joined).toContain('$QA_AGENT_TOKEN');
+    expect(joined).not.toContain('super-secret-fixture-token');
+  });
+
+  it('omits the body step for a GET case with no body', () => {
+    const c = passedCase();
+    c.status = 'failed';
+    c.checks = [{ name: 'status', kind: 'status', expected: 200, actual: 500, passed: false }];
+    const steps = deriveReproSteps(c, { baseUrl: 'http://localhost:3000' });
+    expect(steps.some((s) => s.startsWith('Body:'))).toBe(false);
+  });
+});
+
+describe('renderCase — reproduction steps wiring', () => {
+  it('renders caseObj.reproSteps verbatim when non-empty, without calling the deriver', () => {
+    const c = failedCase();
+    c.reproSteps = ['Custom step one', 'Custom step two'];
+    const section = renderCase(c, 1, { baseUrl: 'http://localhost:3000' });
+    expect(section).toContain('Custom step one');
+    expect(section).toContain('Custom step two');
+    expect(section).not.toContain('curl -X');
+  });
+
+  it('emits a Reproduction steps heading and numbered list for a failed case with no reproSteps', () => {
+    const section = renderCase(failedCase(), 1, { baseUrl: 'http://localhost:3000' });
+    expect(section).toContain('**Reproduction steps:**');
+    expect(section).toMatch(/\n1\. /);
+  });
+
+  it('emits no Reproduction steps heading for a passed case', () => {
+    const section = renderCase(passedCase(), 1, { baseUrl: 'http://localhost:3000' });
+    expect(section).not.toContain('**Reproduction steps:**');
+  });
+
+  it('emits no reproduction steps for a blocked case', () => {
+    const section = renderCase(blockedCase(), 1, { baseUrl: 'http://localhost:3000' });
+    expect(section).not.toContain('**Reproduction steps:**');
+  });
+});
+
+describe('chatSummary', () => {
+  it('contains the counts line, a line per failed case, and the absolute report path; capped at 15 lines', () => {
+    const cases = [];
+    for (let i = 0; i < 10; i += 1) {
+      const c = failedCase();
+      c.id = `failed-${i}`;
+      c.evidence.request.url = `/api/clients/${i}`;
+      cases.push(c);
+    }
+    for (let i = 0; i < 10; i += 1) {
+      const c = blockedCase();
+      c.id = `blocked-${i}`;
+      c.evidence.request.url = `/api/clients/${i}`;
+      cases.push(c);
+    }
+    const results = { schemaVersion: 1, run: makeRun(), cases };
+    const summary = chatSummary(results, '/tmp/report.md');
+
+    expect(summary).toContain('10 failed');
+    expect(summary).toContain('10 blocked');
+    expect(summary).toContain('FAILED  POST /api/clients/0');
+    expect(summary).toContain('...and 5 more failed');
+    expect(summary).toContain('BLOCKED DELETE /api/clients/0');
+    expect(summary).toContain('...and 5 more blocked');
+    expect(summary).toContain(resolve('/tmp/report.md'));
+    expect(summary.split('\n').length).toBeLessThanOrEqual(15);
+  });
+});
+
+describe('renderReport — zero cases', () => {
+  it('renders without throwing and shows 0 passed · 0 failed · 0 blocked (pending confirmation)', () => {
+    const results = { schemaVersion: 1, run: makeRun(), cases: [] };
+    let markdown;
+    expect(() => {
+      markdown = renderReport(results);
+    }).not.toThrow();
+    expect(markdown).toContain('0 passed · 0 failed · 0 blocked (pending confirmation)');
   });
 });
