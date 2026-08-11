@@ -11,18 +11,18 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **SAFE-01**: El agente nunca ejecuta una acción destructiva (delete, pago, cambio de rol/permiso, envío de email real) sin confirmación explícita del usuario en ese momento
 - [ ] **SAFE-02**: El agente distingue y marca claramente en el reporte qué acciones fueron ejecutadas vs. bloqueadas por requerir confirmación
-- [ ] **SAFE-03**: Cada veredicto de pass/fail queda respaldado por evidencia capturada en el momento (screenshot, respuesta HTTP, snapshot del DOM) — no hay veredictos sin evidencia adjunta
+- [x] **SAFE-03**: Cada veredicto de pass/fail queda respaldado por evidencia capturada en el momento (screenshot, respuesta HTTP, snapshot del DOM) — no hay veredictos sin evidencia adjunta
 
 ### Execution Engine (UI)
 
 - [ ] **EXEC-01**: El agente puede navegar autónomamente una app web (single Chromium context vía Playwright) y ejecutar acciones (click, fill, submit) sobre flujos y formularios
 - [ ] **EXEC-02**: El agente puede recibir instrucciones en lenguaje natural ("probá el alta de cliente") y traducirlas en pasos de navegación concretos
 - [ ] **EXEC-03**: El agente puede autenticarse en la app objetivo usando credenciales de test provistas por variable de entorno (nunca hardcodeadas en el skill)
-- [ ] **EXEC-04**: El agente puede apuntar tanto a localhost como a una URL de staging, recibiendo la URL base como parámetro
+- [x] **EXEC-04**: El agente puede apuntar tanto a localhost como a una URL de staging, recibiendo la URL base como parámetro
 
 ### API Testing
 
-- [ ] **API-01**: El agente puede ejecutar requests HTTP directos (GET/POST/PUT/DELETE) contra endpoints de la app objetivo, sin necesitar el navegador
+- [x] **API-01**: El agente puede ejecutar requests HTTP directos (GET/POST/PUT/DELETE) contra endpoints de la app objetivo, sin necesitar el navegador
 - [ ] **API-02**: El agente valida códigos de estado, forma de la respuesta (contrato/schema) y manejo de errores esperado
 - [ ] **API-03**: El agente puede reusar la sesión/autenticación obtenida en la ejecución UI para llamadas API relacionadas
 
@@ -36,13 +36,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Reporting
 
-- [ ] **REP-01**: El agente produce un reporte legible que indica qué se probó, qué pasó/falló y por qué, con evidencia adjunta por caso
+- [x] **REP-01**: El agente produce un reporte legible que indica qué se probó, qué pasó/falló y por qué, con evidencia adjunta por caso
 - [ ] **REP-02**: El reporte incluye pasos de reproducción para cada caso fallido
 - [ ] **REP-03**: El agente soporta un modo "smoke test" que corre solo los flujos esenciales de forma rápida, en vez de una regresión completa
 
 ### Packaging
 
-- [ ] **PKG-01**: El agente está empaquetado como skill de Claude Code instalable (`~/.claude/skills/`), invocable vía slash command
+- [x] **PKG-01**: El agente está empaquetado como skill de Claude Code instalable (`~/.claude/skills/`), invocable vía slash command
 - [ ] **PKG-02**: El skill funciona de forma agnóstica sobre cualquier proyecto (sin configuración específica previa), asumiendo stacks tipo Next.js/Supabase
 - [ ] **PKG-03**: El skill es distribuible al equipo de trabajo (copiar/instalar en la carpeta de skills de cada persona)
 
@@ -82,12 +82,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | SAFE-01 | Phase 1 | Pending |
 | SAFE-02 | Phase 1 | Pending |
-| SAFE-03 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Complete |
 | EXEC-01 | Phase 2 | Pending |
 | EXEC-02 | Phase 2 | Pending |
 | EXEC-03 | Phase 2 | Pending |
-| EXEC-04 | Phase 1 | Pending |
-| API-01 | Phase 1 | Pending |
+| EXEC-04 | Phase 1 | Complete |
+| API-01 | Phase 1 | Complete |
 | API-02 | Phase 1 | Pending |
 | API-03 | Phase 2 | Pending |
 | DISC-01 | Phase 3 | Pending |
@@ -95,14 +95,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISC-03 | Phase 3 | Pending |
 | DISC-04 | Phase 4 | Pending |
 | DISC-05 | Phase 4 | Pending |
-| REP-01 | Phase 1 | Pending |
+| REP-01 | Phase 1 | Complete |
 | REP-02 | Phase 1 | Pending |
 | REP-03 | Phase 5 | Pending |
-| PKG-01 | Phase 1 | Pending |
+| PKG-01 | Phase 1 | Complete |
 | PKG-02 | Phase 5 | Pending |
 | PKG-03 | Phase 5 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 21 total
 - Mapped to phases: 21 ✓
 - Unmapped: 0

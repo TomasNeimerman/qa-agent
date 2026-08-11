@@ -7,6 +7,7 @@ QA Agent ships as a Claude Code skill that eliminates manual regression/form tes
 ## Phases
 
 **Phase Numbering:**
+
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
@@ -21,64 +22,80 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Foundation, Guardrails & API Testing
+
 **Goal**: A developer can invoke the QA agent as an installed Claude Code skill and get a reliable, evidence-backed API test run against a local or staging target, with destructive actions safely gated behind confirmation.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
 **Requirements**: PKG-01, SAFE-01, SAFE-02, SAFE-03, API-01, API-02, EXEC-04, REP-01, REP-02
 **Success Criteria** (what must be TRUE):
+
   1. User can invoke the skill via a slash command in Claude Code and it runs against a target project with no prior project-specific setup (PKG-01).
   2. User can point the agent at localhost or a staging URL (passed as a base-URL parameter) and it runs HTTP requests (GET/POST/PUT/DELETE) against that target, validating status codes and response shape/errors (API-01, API-02, EXEC-04).
   3. When the agent is about to perform a destructive action (delete, payment, role/permission change, real email) via the API, it stops and requires explicit confirmation before proceeding, and the resulting report clearly distinguishes actions that were executed from actions that were blocked pending confirmation (SAFE-01, SAFE-02).
   4. After a run, the user receives a readable report showing what was tested and what passed/failed, with every verdict backed by captured evidence (HTTP request/response) and reproduction steps attached to each failing case (SAFE-03, REP-01, REP-02).
-**Plans**: 4 plans
+
+**Plans**: 1/4 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — Tracer: installable `/qa-agent` skill sends one real GET and writes an evidence-backed report
+
+- [x] 01-01-PLAN.md — Tracer: installable `/qa-agent` skill sends one real GET and writes an evidence-backed report
 - [ ] 01-02-PLAN.md — Destructive-action confirmation gate (script refusal + PreToolUse hook backstop)
 - [ ] 01-03-PLAN.md — Three-state evidence-quoted report with reproduction steps and chat summary
 - [ ] 01-04-PLAN.md — Full GET/POST/PUT/DELETE dispatch, shape observation, preflight and target safety
 
 ### Phase 2: Browser Execution Engine
+
 **Goal**: The agent can autonomously drive a real browser to execute application flows described in natural language, authenticate as a test user, and reuse that session for related API checks.
 **Mode:** mvp
 **Depends on**: Phase 1
 **Requirements**: EXEC-01, EXEC-02, EXEC-03, API-03
 **Success Criteria** (what must be TRUE):
+
   1. User can give a natural-language instruction (e.g. "probá el alta de cliente") and the agent translates it into concrete browser actions (click/fill/submit) executed end-to-end against the target app (EXEC-01, EXEC-02).
   2. The agent logs into the target app, on either localhost or staging, using test credentials supplied via environment variables and never hardcoded in the skill (EXEC-03).
   3. Once authenticated in the browser, the agent reuses that same session to make related API calls within the same run, without a separate login step (API-03).
+
 **Plans**: TBD
 
 ### Phase 3: Dual Discovery & Test-Case Generation
+
 **Goal**: The agent can determine what to test either by reading the target project's code or from a plain natural-language instruction, and turn that into documented test cases ready for the executors from Phase 1 and Phase 2 to run.
 **Mode:** mvp
 **Depends on**: Phase 1, Phase 2
 **Requirements**: DISC-01, DISC-02, DISC-03
 **Success Criteria** (what must be TRUE):
+
   1. User can point the agent at a project and it scans routes, input fields, validation schemas, and database constraints to infer testable surfaces, without being told what to test (DISC-01).
   2. From what it discovers in code, the agent produces documented test cases (title, preconditions, steps, expected result, type: positive/negative/edge) that the API and browser executors can run directly (DISC-02).
   3. User can instead give a one-off natural-language instruction and get documented test cases generated for just that flow, without the agent scanning the whole codebase (DISC-03).
+
 **Plans**: TBD
 
 ### Phase 4: Edge-Case & Input Validation Quality
+
 **Goal**: Test cases the agent generates systematically cover input-validation boundaries and negative/permission edge scenarios, grounded in the constraints discovered in Phase 3, not just the happy path.
 **Mode:** mvp
 **Depends on**: Phase 3
 **Requirements**: DISC-04, DISC-05
 **Success Criteria** (what must be TRUE):
+
   1. For any discovered set of input fields, the agent generates test cases covering required-field omission, invalid formats, and boundary values (min/max length, numeric limits) (DISC-04).
   2. The agent generates and executes negative/edge cases beyond input validation — out-of-range data, wrong data types, and permission/auth edge cases (e.g. attempting an action outside the test user's role) — as part of the same run (DISC-05).
+
 **Plans**: TBD
 
 ### Phase 5: Smoke-Test Mode & Cross-Project Distribution
+
 **Goal**: The agent supports a fast post-deploy smoke check and is packaged so any teammate can install it and run it unmodified against any of the team's projects.
 **Mode:** mvp
 **Depends on**: Phase 1, Phase 2, Phase 3, Phase 4
 **Requirements**: REP-03, PKG-02, PKG-03
 **Success Criteria** (what must be TRUE):
+
   1. User can invoke a "smoke test" mode that runs only the essential flows quickly, instead of a full regression pass (REP-03).
   2. The skill runs unmodified against any of the team's existing projects (DATAX, dotax, franquix) without project-specific configuration (PKG-02).
   3. A teammate can install the skill by copying it into their own skills folder and immediately invoke it via slash command, with no setup beyond that (PKG-03).
+
 **Plans**: TBD
 
 ## Progress
@@ -88,7 +105,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
-| 1. Foundation, Guardrails & API Testing | 0/4 | Planned | - |
+| 1. Foundation, Guardrails & API Testing | 1/4 | In Progress|  |
 | 2. Browser Execution Engine | 0/TBD | Not started | - |
 | 3. Dual Discovery & Test-Case Generation | 0/TBD | Not started | - |
 | 4. Edge-Case & Input Validation Quality | 0/TBD | Not started | - |
