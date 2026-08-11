@@ -10,7 +10,21 @@
 //   2 = ConfigError (QA_AGENT_BASE_URL / QA_AGENT_TOKEN not configured)
 //   3 = confirmation required, nothing sent (destructive method without
 //       --confirmed — see requiresConfirmation in scripts/destructive.mjs)
-//   4 = target unreachable / request-level failure
+//   4 = target unreachable / request-level failure (including a failed
+//       preflight reachability probe)
+//   5 = evidence missing (reserved for scripts/format-report.mjs)
+//   6 = production-looking target refused (see looksLikeProduction) —
+//       --allow-non-local unlocks it, this is a stop-and-ask, not a ban
+//
+// CLI startup check order (documented once, here, since the order itself is
+// the guarantee): 1) confirmation gate — nothing is sent and no credential
+// is read for an unconfirmed/declined destructive call; 2) production-target
+// check — refuses a production-looking host before the token is even read;
+// 3) readConfig — resolves QA_AGENT_BASE_URL / QA_AGENT_TOKEN, loud failure
+// (exit 2) if either is missing; 4) preflight — a single reachability probe
+// against the resolved base URL; 5) dispatch — runCase actually sends the
+// request. Widening the method set (this plan) or adding new checks later
+// must preserve this order, not add a bypass around any earlier step.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -22,6 +36,19 @@ import { previewOf, requiresConfirmation } from './destructive.mjs';
 export const RESULTS_SCHEMA_VERSION = 1;
 
 export class ConfigError extends Error {}
+
+// Explicit dispatch map — the only way a method string reaches the
+// Playwright context. A typo or an unrecognised method (e.g. "PURGE") must
+// never become a dynamic property lookup on the context (T-01-20); it must
+// throw before any network activity instead.
+export const DISPATCH = {
+  GET: 'get',
+  POST: 'post',
+  PUT: 'put',
+  PATCH: 'patch',
+  DELETE: 'delete',
+  HEAD: 'head',
+};
 
 const REDACTED_HEADER_KEYS = new Set([
   'authorization',
@@ -83,9 +110,13 @@ export function readConfig({ baseUrlArg, projectRoot } = {}) {
  * case object shaped per the results.json contract.
  */
 export async function runCase({ method, url, title, body, baseUrl, token, expectStatus }) {
-  const m = method.toUpperCase();
-  const lower = m.toLowerCase();
+  const m = String(method ?? '').toUpperCase();
+  const dispatchKey = DISPATCH[m];
+  if (!dispatchKey) {
+    throw new Error(`Unsupported HTTP method: ${m}`);
+  }
 
+  const absoluteUrl = new URL(url, baseUrl).toString();
   const requestHeaders = { Authorization: `Bearer ${token}` };
 
   const context = await request.newContext({
@@ -98,12 +129,9 @@ export async function runCase({ method, url, title, body, baseUrl, token, expect
     let response;
     try {
       const options = body !== undefined && body !== null ? { data: body } : undefined;
-      if (typeof context[lower] !== 'function') {
-        throw new Error(`Unsupported HTTP method: ${m}`);
-      }
-      response = await context[lower](url, options);
+      response = await context[dispatchKey](url, options);
     } catch (err) {
-      const wrapped = new Error(`target unreachable: ${err.message}`);
+      const wrapped = new Error(`target unreachable: ${absoluteUrl} — ${err.message}`);
       wrapped.cause = err;
       throw wrapped;
     }
@@ -150,7 +178,7 @@ export async function runCase({ method, url, title, body, baseUrl, token, expect
       evidence: {
         request: {
           method: m,
-          url,
+          url: absoluteUrl,
           headers: redactHeaders(requestHeaders),
           body: body ?? null,
         },
