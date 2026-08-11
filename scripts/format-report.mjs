@@ -312,12 +312,9 @@ async function main() {
   const copyPath = resolve(outDir, `${stem}.results.json`);
   copyFileSync(resultsPath, copyPath);
 
-  const passed = results.cases.filter((c) => c.status === 'passed').length;
-  const failed = results.cases.filter((c) => c.status === 'failed').length;
-  const blocked = results.cases.filter((c) => c.status === 'blocked').length;
-
-  process.stdout.write(`${reportPath}\n`);
-  process.stdout.write(`${passed} passed · ${failed} failed · ${blocked} blocked\n`);
+  // Printed to stdout so the Bash tool's own output carries the summary the
+  // orchestrator restates in chat (D-07's two-way delivery).
+  process.stdout.write(`${chatSummary(results, reportPath)}\n`);
   process.exit(0);
 }
 
