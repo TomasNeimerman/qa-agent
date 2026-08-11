@@ -3,12 +3,21 @@
 // This is the ONLY tier that ever dispatches an outbound HTTP request or sees the
 // plaintext auth token. Everything it returns/prints/writes has already been
 // redacted (see redactHeaders) before it leaves this module.
+//
+// CLI exit codes:
+//   0 = case recorded (a passed case, a failed case, or a declined/blocked case
+//       via --declined — all are a successful run of this script)
+//   2 = ConfigError (QA_AGENT_BASE_URL / QA_AGENT_TOKEN not configured)
+//   3 = confirmation required, nothing sent (destructive method without
+//       --confirmed — see requiresConfirmation in scripts/destructive.mjs)
+//   4 = target unreachable / request-level failure
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { request } from 'playwright';
+import { previewOf, requiresConfirmation } from './destructive.mjs';
 
 export const RESULTS_SCHEMA_VERSION = 1;
 
@@ -219,6 +228,68 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const projectRoot = args['project-root'] ?? process.cwd();
 
+  const method = args.method ?? 'GET';
+  const m = method.toUpperCase();
+  const url = args.url ?? '/';
+  const title = args.title;
+  const body = args.body !== undefined ? JSON.parse(args.body) : undefined;
+  const expectStatus = args['expect-status'];
+  const resultsPath = args.results ? resolve(args.results) : resolve(projectRoot, 'results.json');
+  const confirmed = Boolean(args.confirmed);
+  const declined = Boolean(args.declined);
+  const readOnlyIntent = Boolean(args['read-only-intent']);
+  const blockedReasonArg = typeof args['blocked-reason'] === 'string' ? args['blocked-reason'] : undefined;
+  const baseUrlForPreview = args['base-url'] ?? process.env.QA_AGENT_BASE_URL;
+
+  // The destructive-action gate (D-01–D-04) is evaluated here, before
+  // readConfig() resolves the auth token, so an unconfirmed/declined
+  // destructive call can never even cause a credential read. This gate runs
+  // on every invocation — it cannot be disabled by an env var, a config
+  // file, or any flag other than the per-call --confirmed, and there is no
+  // bulk/session-wide approval mechanism (D-03, RESEARCH Anti-Patterns).
+
+  if (declined) {
+    // --declined short-circuits before any network work or config read.
+    const placeholderHeaders = { Authorization: 'Bearer [not sent — declined before dispatch]' };
+    const caseObj = {
+      id: `case-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: title ?? `${m} ${url}`,
+      status: 'blocked',
+      evidence: {
+        request: {
+          method: m,
+          url,
+          headers: redactHeaders(placeholderHeaders),
+          body: body ?? null,
+        },
+        response: null,
+      },
+      checks: [],
+      verdict: `NOT EXECUTED — ${m} ${url} was declined; no request was sent`,
+      reproSteps: [],
+      blockedReason:
+        blockedReasonArg ??
+        'The developer declined confirmation for this destructive call — no request was sent.',
+    };
+
+    appendCase(resultsPath, caseObj, { baseUrl: baseUrlForPreview ?? null, instruction: title, title });
+    process.stdout.write(`${JSON.stringify(caseObj)}\n`);
+    process.exit(0);
+    return;
+  }
+
+  if (requiresConfirmation(m, { looksReadOnly: readOnlyIntent }) && !confirmed) {
+    const preview = previewOf({ method: m, url, baseUrl: baseUrlForPreview, body });
+    const payload = {
+      status: 'needs_confirmation',
+      preview,
+      reason: `${m} ${preview.url} is a destructive call and requires --confirmed before it can be dispatched`,
+    };
+    process.stdout.write(`${JSON.stringify(payload)}\n`);
+    process.exit(3);
+    return;
+  }
+
   let config;
   try {
     config = readConfig({ baseUrlArg: args['base-url'], projectRoot });
@@ -229,13 +300,6 @@ async function main() {
     }
     throw err;
   }
-
-  const method = args.method ?? 'GET';
-  const url = args.url ?? '/';
-  const title = args.title;
-  const body = args.body !== undefined ? JSON.parse(args.body) : undefined;
-  const expectStatus = args['expect-status'];
-  const resultsPath = args.results ? resolve(args.results) : resolve(projectRoot, 'results.json');
 
   let caseObj;
   try {
