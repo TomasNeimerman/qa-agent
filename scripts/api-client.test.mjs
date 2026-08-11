@@ -442,6 +442,28 @@ describe('preflight', () => {
       new RegExp(closedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     );
   });
+
+  it('the CLI maps a failed preflight to exit 4 with a "target unreachable" message and sends no case-bearing request', async () => {
+    const throwaway = await startMockServer();
+    const closedUrl = throwaway.url;
+    await throwaway.close();
+
+    const resultsPath = join(tmpDir, 'results.json');
+    const { status, stderr } = runClient(
+      ['--method', 'GET', '--url', '/api/clients', '--base-url', closedUrl, '--results', resultsPath],
+      { expectFailure: true }
+    );
+
+    expect(status).toBe(4);
+    expect(stderr).toContain('target unreachable');
+    expect(stderr).toContain(closedUrl);
+
+    // The closed port can never have received anything, so this is really a
+    // sanity check that the CLI test's own mock server (a separate host) was
+    // never touched by this invocation either.
+    const log = await cliRequestLog();
+    expect(log.length).toBe(0);
+  });
 });
 
 describe('CLI — production-target refusal (exit 6)', () => {
