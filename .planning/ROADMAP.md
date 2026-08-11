@@ -34,14 +34,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. When the agent is about to perform a destructive action (delete, payment, role/permission change, real email) via the API, it stops and requires explicit confirmation before proceeding, and the resulting report clearly distinguishes actions that were executed from actions that were blocked pending confirmation (SAFE-01, SAFE-02).
   4. After a run, the user receives a readable report showing what was tested and what passed/failed, with every verdict backed by captured evidence (HTTP request/response) and reproduction steps attached to each failing case (SAFE-03, REP-01, REP-02).
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 
 - [x] 01-01-PLAN.md — Tracer: installable `/qa-agent` skill sends one real GET and writes an evidence-backed report
 - [x] 01-02-PLAN.md — Destructive-action confirmation gate (script refusal + PreToolUse hook backstop)
 - [x] 01-03-PLAN.md — Three-state evidence-quoted report with reproduction steps and chat summary
-- [ ] 01-04-PLAN.md — Full GET/POST/PUT/DELETE dispatch, shape observation, preflight and target safety
+- [x] 01-04-PLAN.md — Full GET/POST/PUT/DELETE dispatch, shape observation, preflight and target safety
 
 ### Phase 2: Browser Execution Engine
 
@@ -105,7 +105,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
-| 1. Foundation, Guardrails & API Testing | 3/4 | In Progress|  |
+| 1. Foundation, Guardrails & API Testing | 4/4 | In Progress|  |
 | 2. Browser Execution Engine | 0/TBD | Not started | - |
 | 3. Dual Discovery & Test-Case Generation | 0/TBD | Not started | - |
 | 4. Edge-Case & Input Validation Quality | 0/TBD | Not started | - |

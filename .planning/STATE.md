@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Foundation, Guardrails & API Testing
-status: executing
-stopped_at: Completed 01-03-PLAN.md (report template, three-state rendering, reproduction steps, chat summary, 45/45 vitest passing)
-last_updated: "2026-08-11T17:13:46.192Z"
+status: verifying
+stopped_at: Completed 01-04-PLAN.md (full GET/POST/PUT/PATCH/DELETE dispatch, zod shape observation, preflight, production-target refusal — Phase 1 all 4 plans executed, 81/81 vitest passing)
+last_updated: "2026-08-11T18:10:51.504Z"
 last_activity: 2026-08-11
 last_activity_desc: Phase 1 execution resumed (wave continue)
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 
 Phase: 1 (Foundation, Guardrails & API Testing) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-11 — Phase 1 execution resumed (wave continue)
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [████████░░] 75%
 | Phase 01 P01 | 12min | 2 tasks | 8 files |
 | Phase 01 P02 | 67min | 2 tasks | 8 files |
 | Phase 1 P3 | 28min | 2 tasks | 3 files |
+| Phase 01 P04 | 27min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Recent decisions affecting current work:
 - [Phase ?]: RESEARCH Assumption A2 (skill-scoped hooks: frontmatter) verified live against code.claude.com docs this session and confirmed correct — upgraded from LOW confidence to confirmed
 - [Phase ?]: 01-03: blocked cases render in both the quick-scan 'Blocked pending confirmation' summary AND their own full Case N detail section, in original run order, resolving the plan's apparent 'blocked-first' vs 'results.cases order' tension additively
 - [Phase ?]: 01-03: Task 2's implementation was briefly committed ahead of its RED test (folded into Task 1's commit), then corrected by stripping it out, re-observing a genuine RED, and re-applying GREEN before committing — documented as a process deviation in 01-03-SUMMARY.md
+- [Phase ?]: [Phase 1] 01-04: evidence.request.url now stores the absolute URL (new URL(url, baseUrl)) instead of the raw relative path, matching previewOf's resolution and proving EXEC-04's dual-environment targeting on the evidence object itself
+- [Phase ?]: [Phase 1] 01-04: preflight() runs once per CLI invocation ahead of every dispatch, which added one HEAD request to the mock's request log on every real dispatch — two exact-count assertions in destructive.test.mjs (01-02's file) were updated to account for it, documented as a deviation
 
 ### Pending Todos
 
@@ -100,6 +103,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-11T17:13:46.182Z
-Stopped at: Completed 01-03-PLAN.md (report template, three-state rendering, reproduction steps, chat summary, 45/45 vitest passing)
+Last session: 2026-08-11T18:10:51.494Z
+Stopped at: Completed 01-04-PLAN.md (full GET/POST/PUT/PATCH/DELETE dispatch, zod shape observation, preflight, production-target refusal — Phase 1 all 4 plans executed, 81/81 vitest passing)
 Resume file: None

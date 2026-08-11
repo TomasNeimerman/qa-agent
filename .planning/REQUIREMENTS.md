@@ -23,7 +23,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### API Testing
 
 - [x] **API-01**: El agente puede ejecutar requests HTTP directos (GET/POST/PUT/DELETE) contra endpoints de la app objetivo, sin necesitar el navegador
-- [ ] **API-02**: El agente valida códigos de estado, forma de la respuesta (contrato/schema) y manejo de errores esperado
+- [x] **API-02**: El agente valida códigos de estado, forma de la respuesta (contrato/schema) y manejo de errores esperado
 - [ ] **API-03**: El agente puede reusar la sesión/autenticación obtenida en la ejecución UI para llamadas API relacionadas
 
 ### Discovery & Test Generation
@@ -88,7 +88,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXEC-03 | Phase 2 | Pending |
 | EXEC-04 | Phase 1 | Complete |
 | API-01 | Phase 1 | Complete |
-| API-02 | Phase 1 | Pending |
+| API-02 | Phase 1 | Complete |
 | API-03 | Phase 2 | Pending |
 | DISC-01 | Phase 3 | Pending |
 | DISC-02 | Phase 3 | Pending |
