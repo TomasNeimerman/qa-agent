@@ -105,6 +105,94 @@ export function readConfig({ baseUrlArg, projectRoot } = {}) {
   return { baseUrl, token };
 }
 
+const NON_PROD_KEYWORDS = ['staging', 'stage', 'dev', 'test', 'qa', 'preview', 'sandbox'];
+const NON_PROD_SUFFIXES = ['.local', '.localhost', 'vercel.app', 'netlify.app'];
+
+function isPrivateIPv4(hostname) {
+  const match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!match) return false;
+  const [a, b] = [Number(match[1]), Number(match[2])];
+  if (a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  return false;
+}
+
+/**
+ * Returns true when `baseUrl`'s hostname does not look like localhost, a
+ * private-range IPv4 address, or a named non-production environment
+ * (staging/stage/dev/test/qa/preview/sandbox anywhere in the hostname, or a
+ * `.local`/`.localhost`/`vercel.app`/`netlify.app` suffix). An unparseable
+ * base URL, and any other unrecognised public hostname, is treated as
+ * production — per the project's PITFALLS rule that the default target must
+ * never be production, the safe default under uncertainty is to stop and
+ * ask (T-01-16), not to silently proceed.
+ */
+export function looksLikeProduction(baseUrl) {
+  let hostname;
+  try {
+    hostname = new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+
+  if (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0' ||
+    hostname === '::1' ||
+    hostname.endsWith('.local') ||
+    hostname.endsWith('.localhost')
+  ) {
+    return false;
+  }
+
+  if (isPrivateIPv4(hostname)) return false;
+  if (NON_PROD_KEYWORDS.some((kw) => hostname.includes(kw))) return false;
+  if (NON_PROD_SUFFIXES.some((suffix) => hostname.endsWith(suffix))) return false;
+
+  return true;
+}
+
+/**
+ * Issues a single lightweight reachability probe against `baseUrl`'s root —
+ * HEAD first, falling back to GET when the server rejects HEAD (405/501) or
+ * a transport error occurs — with a short timeout. Resolves on ANY HTTP
+ * response, including 4xx: this answers "is something listening and
+ * speaking HTTP", not "is the app healthy". Rejects with a "target
+ * unreachable" error naming `baseUrl` on a transport failure, so a down
+ * target fails the whole run fast (exit 4) instead of producing a report
+ * full of misleading per-case failures (RESEARCH Environment Availability).
+ */
+export async function preflight(baseUrl, token) {
+  const context = await request.newContext({
+    baseURL: baseUrl,
+    extraHTTPHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+    timeout: 5000,
+  });
+
+  try {
+    let response;
+    try {
+      response = await context.head('/');
+      if (response.status() === 405 || response.status() === 501) {
+        response = await context.get('/');
+      }
+    } catch {
+      try {
+        response = await context.get('/');
+      } catch (getErr) {
+        const wrapped = new Error(`target unreachable: ${baseUrl} — ${getErr.message}`);
+        wrapped.cause = getErr;
+        throw wrapped;
+      }
+    }
+    return response;
+  } finally {
+    await context.dispose();
+  }
+}
+
 /**
  * Builds a loose zod schema for "shape observed" validation (D-05, D-10).
  * With no field names, returns `z.unknown()` — with no specification to be
@@ -125,6 +213,24 @@ export function buildShapeSchema(fieldNames = []) {
   }
   const shape = Object.fromEntries(fieldNames.map((name) => [name, z.unknown()]));
   return z.object(shape);
+}
+
+/**
+ * Composes a one-line verdict sentence strictly from the check objects —
+ * naming the method, URL, status, and (on failure) the first failed check —
+ * never free-authored narrative.
+ */
+function composeVerdict({ method, url, status, checks }) {
+  const allPassed = checks.every((c) => c.passed);
+  if (allPassed) {
+    return `PASSED — ${method} ${url} responded ${status}`;
+  }
+  const firstFailed = checks.find((c) => !c.passed);
+  return (
+    `FAILED — ${method} ${url} responded ${status}; ` +
+    `${firstFailed.name} failed (expected ${JSON.stringify(firstFailed.expected)}, ` +
+    `got ${JSON.stringify(firstFailed.actual)})`
+  );
 }
 
 /**
@@ -218,6 +324,13 @@ export async function runCase({
 
     const allPassed = checks.every((c) => c.passed);
 
+    let verdict = composeVerdict({ method: m, url: absoluteUrl, status, checks });
+    if (status === 401 || status === 403) {
+      verdict +=
+        ` Note: repeated ${status} responses across cases usually indicate a ` +
+        'QA_AGENT_TOKEN problem rather than an application defect.';
+    }
+
     const caseObj = {
       id: `case-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       title: title ?? `${m} ${url}`,
@@ -238,9 +351,7 @@ export async function runCase({
         },
       },
       checks,
-      verdict: allPassed
-        ? `PASSED — status ${status}, response is ${isJson ? 'valid JSON' : 'non-JSON text'}`
-        : `FAILED — one or more checks failed (see checks[])`,
+      verdict,
       reproSteps: [],
       blockedReason: null,
     };
@@ -321,6 +432,7 @@ async function main() {
   const declined = Boolean(args.declined);
   const readOnlyIntent = Boolean(args['read-only-intent']);
   const blockedReasonArg = typeof args['blocked-reason'] === 'string' ? args['blocked-reason'] : undefined;
+  const allowNonLocal = Boolean(args['allow-non-local']);
   const baseUrlForPreview = args['base-url'] ?? process.env.QA_AGENT_BASE_URL;
 
   // The destructive-action gate (D-01–D-04) is evaluated here, before
@@ -372,6 +484,20 @@ async function main() {
     return;
   }
 
+  // Production-target check (T-01-16, T-01-17): evaluated before readConfig
+  // resolves the token, so a refused target never causes the credential to
+  // even be read. Only checked when a base URL is actually known — a
+  // missing base URL falls through to readConfig's own "not configured"
+  // error instead of crashing here.
+  if (baseUrlForPreview && looksLikeProduction(baseUrlForPreview) && !allowNonLocal) {
+    process.stderr.write(
+      `Refusing to run against ${baseUrlForPreview} — it looks like a production target. ` +
+        `Pass --allow-non-local to proceed.\n`
+    );
+    process.exit(6);
+    return;
+  }
+
   let config;
   try {
     config = readConfig({ baseUrlArg: args['base-url'], projectRoot });
@@ -381,6 +507,14 @@ async function main() {
       process.exit(2);
     }
     throw err;
+  }
+
+  try {
+    await preflight(config.baseUrl, config.token);
+  } catch (err) {
+    process.stderr.write(`${err.message}\n`);
+    process.exit(4);
+    return;
   }
 
   let caseObj;

@@ -39,6 +39,20 @@ configuration error message. It never proceeds with a missing or empty
 `Authorization` header and never reports the resulting 401s as ordinary test
 failures (D-09).
 
+`api-client.mjs`'s exit codes — a configuration error (2), a refused
+confirmation (3), an unreachable target (4), or a refused production-looking
+host (6) **stops the run**; it is never rendered into the report as if it
+were a test failure (D-09):
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | Case recorded — passed, failed, or blocked (`--declined`) are all a successful run of the script |
+| 2 | Configuration error — `QA_AGENT_BASE_URL is not configured` or `QA_AGENT_TOKEN is not configured` |
+| 3 | Confirmation required — a destructive call was dispatched without `--confirmed`, nothing was sent |
+| 4 | Target unreachable — either the preflight probe or the dispatch itself hit a transport-level failure |
+| 5 | Evidence missing — `format-report.mjs` refused to render a passed/failed case with no response evidence |
+| 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
+
 ## Run protocol
 
 1. Parse `$ARGUMENTS`: take the first whitespace-delimited token as the base
@@ -72,6 +86,33 @@ failures (D-09).
 Response-shape checks in this phase are labelled **"shape observed"**, not
 "contract validated" — no API specification exists yet, so any inferred shape
 check is a hint, not ground truth (D-10).
+
+## Case construction
+
+Turning the developer's natural-language instruction into `api-client.mjs`
+invocations is the orchestrator's own judgment call — there is no spec to
+compile against (D-05):
+
+- **One case per endpoint the developer named.** "probá GET /api/clients y
+  POST /api/clients" is two cases, one invocation each — never batch several
+  endpoints into a single call.
+- **`--expect-status <code>`** only when the developer stated an expectation
+  ("debería devolver 201"). When they name nothing, the run falls back to the
+  default 2xx check — never invent a specific expected status the developer
+  never mentioned.
+- **`--expect-fields <a,b,c>`** listing only fields the developer explicitly
+  named in their instruction ("que devuelva un array de clients"), comma
+  separated, no spaces required. Never add a field to the list because it
+  looks like it should be there — an unnamed field is never checked, per
+  D-05/D-10's "shape observed, not contract validated" stance.
+- **`--allow-non-local`** only after the developer has explicitly confirmed
+  they want to target a non-local host — a run refused with exit `6` names
+  the host and the flag; re-invoke the identical command with the flag added
+  once the developer has said yes. Never add this flag preemptively "just in
+  case" a target turns out to be production-looking.
+- **`--base-url`** is the same base URL for every case in a run — resolve it
+  once per run (from the skill's first argument or `QA_AGENT_BASE_URL`), not
+  per case.
 
 ## Confirmation protocol
 

@@ -168,7 +168,7 @@ describe('confirmation gate wired into api-client.mjs', () => {
     });
   });
 
-  it('dispatches a confirmed DELETE: exits 0, appends one case, mock records exactly one DELETE', async () => {
+  it('dispatches a confirmed DELETE: exits 0, appends one case, mock records exactly one DELETE (plus plan 01-04\'s preflight HEAD)', async () => {
     const resultsPath = join(tmpDir, 'results.json');
 
     const { status, stdout } = runClient([
@@ -190,9 +190,12 @@ describe('confirmation gate wired into api-client.mjs', () => {
     const results = JSON.parse(readFileSync(resultsPath, 'utf8'));
     expect(results.cases.length).toBe(1);
 
+    // Plan 01-04 added a preflight reachability probe (a single HEAD /)
+    // ahead of every dispatch, so the log now also carries that entry
+    // alongside the one DELETE this test actually cares about.
     const log = await requestLog();
-    expect(log.length).toBe(1);
-    expect(log[0]).toEqual({ method: 'DELETE', url: '/api/clients/42' });
+    expect(log.length).toBe(2);
+    expect(log.filter((r) => r.method === 'DELETE' && r.url === '/api/clients/42').length).toBe(1);
   });
 
   it('dispatches an unconfirmed POST carrying --read-only-intent (the search/filter carve-out)', async () => {
@@ -211,9 +214,11 @@ describe('confirmation gate wired into api-client.mjs', () => {
     ]);
 
     expect(status).toBe(0);
+    // Plan 01-04's preflight HEAD probe precedes the actual dispatch — see
+    // the confirmed-DELETE test above for the same accounting.
     const log = await requestLog();
-    expect(log.length).toBe(1);
-    expect(log[0]).toEqual({ method: 'POST', url: '/api/search' });
+    expect(log.length).toBe(2);
+    expect(log.filter((r) => r.method === 'POST' && r.url === '/api/search').length).toBe(1);
   });
 
   it('still gates an unconfirmed DELETE even with --read-only-intent', () => {
