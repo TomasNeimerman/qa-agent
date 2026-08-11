@@ -9,7 +9,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { DISPATCH, buildShapeSchema, readConfig, runCase } from './api-client.mjs';
+import {
+  DISPATCH,
+  buildShapeSchema,
+  looksLikeProduction,
+  preflight,
+  readConfig,
+  runCase,
+} from './api-client.mjs';
 import { startMockServer } from './__fixtures__/mock-server.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -388,6 +395,164 @@ describe('CLI — --expect-status and --expect-fields', () => {
     const parsed = JSON.parse(stdout.trim());
     expect(parsed.checks.find((c) => c.name === 'status').expected).toBe(200);
     expect(parsed.checks.some((c) => c.name.startsWith('fields present'))).toBe(true);
+  });
+});
+
+describe('looksLikeProduction', () => {
+  it('is false for localhost and 127.0.0.1', () => {
+    expect(looksLikeProduction('http://localhost:3000')).toBe(false);
+    expect(looksLikeProduction('http://127.0.0.1:8080')).toBe(false);
+  });
+
+  it('is false for a private-range IPv4 host', () => {
+    expect(looksLikeProduction('http://192.168.1.9:3000')).toBe(false);
+    expect(looksLikeProduction('http://10.0.0.5:8080')).toBe(false);
+    expect(looksLikeProduction('http://172.20.0.4:8080')).toBe(false);
+  });
+
+  it('is false for hosts containing staging/dev/test/preview/qa/sandbox, or a .local suffix, or vercel.app', () => {
+    expect(looksLikeProduction('https://staging.acme.com')).toBe(false);
+    expect(looksLikeProduction('https://dev.acme.com')).toBe(false);
+    expect(looksLikeProduction('https://test-api.acme.com')).toBe(false);
+    expect(looksLikeProduction('https://preview.acme.com')).toBe(false);
+    expect(looksLikeProduction('https://qa.acme.com')).toBe(false);
+    expect(looksLikeProduction('https://sandbox.acme.com')).toBe(false);
+    expect(looksLikeProduction('http://myapp.local')).toBe(false);
+    expect(looksLikeProduction('https://my-app-git-branch.vercel.app')).toBe(false);
+  });
+
+  it('is true for an unrecognised public host — the safe default under uncertainty is production', () => {
+    expect(looksLikeProduction('https://app.datax.com.ar')).toBe(true);
+    expect(looksLikeProduction('https://prod.example.com')).toBe(true);
+  });
+});
+
+describe('preflight', () => {
+  it('resolves without throwing against a running target', async () => {
+    await expect(preflight(mock.url, TOKEN)).resolves.toBeDefined();
+  });
+
+  it('rejects with a message containing "target unreachable" and the base URL for a closed port', async () => {
+    const throwaway = await startMockServer();
+    const closedUrl = throwaway.url;
+    await throwaway.close();
+
+    await expect(preflight(closedUrl, TOKEN)).rejects.toThrow(/target unreachable/);
+    await expect(preflight(closedUrl, TOKEN)).rejects.toThrow(
+      new RegExp(closedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    );
+  });
+});
+
+describe('CLI — production-target refusal (exit 6)', () => {
+  it('refuses a production-looking base URL without --allow-non-local: exit 6, message names host and flag, sends nothing', async () => {
+    const resultsPath = join(tmpDir, 'results.json');
+
+    const { status, stderr } = runClient(
+      [
+        '--method',
+        'GET',
+        '--url',
+        '/api/clients',
+        '--base-url',
+        'https://app.acme.com',
+        '--results',
+        resultsPath,
+      ],
+      { expectFailure: true }
+    );
+
+    expect(status).toBe(6);
+    expect(stderr).toContain('app.acme.com');
+    expect(stderr).toContain('--allow-non-local');
+
+    const log = await cliRequestLog();
+    expect(log.length).toBe(0);
+  });
+
+  it('with --allow-non-local, proceeds past the production gate (fails later for an unrelated, expected reason)', () => {
+    const resultsPath = join(tmpDir, 'results.json');
+
+    // app.acme.invalid guarantees DNS failure (RFC 2606 .invalid TLD) — fast
+    // and hermetic, no live external host required. The point of this test
+    // is that the gate no longer stops the run at exit 6; a subsequent,
+    // unrelated failure (unreachable target) is expected and fine.
+    const { status } = runClient(
+      [
+        '--method',
+        'GET',
+        '--url',
+        '/api/clients',
+        '--base-url',
+        'https://app.acme.invalid',
+        '--allow-non-local',
+        '--results',
+        resultsPath,
+      ],
+      { expectFailure: true }
+    );
+
+    expect(status).not.toBe(6);
+  });
+});
+
+describe('CLI — loud misconfiguration (exit 2), before any network activity', () => {
+  it('QA_AGENT_TOKEN absent from the child environment exits 2 with a specific message, sends nothing', async () => {
+    const resultsPath = join(tmpDir, 'results.json');
+    const env = { ...process.env, QA_AGENT_BASE_URL: undefined };
+    delete env.QA_AGENT_TOKEN;
+
+    let threw = false;
+    try {
+      execFileSync(
+        process.execPath,
+        [API_CLIENT, '--method', 'GET', '--url', '/api/clients', '--base-url', cliMockUrl, '--results', resultsPath],
+        { env, encoding: 'utf8' }
+      );
+    } catch (err) {
+      threw = true;
+      expect(err.status).toBe(2);
+      expect(err.stderr.toString()).toContain('QA_AGENT_TOKEN is not configured');
+    }
+    expect(threw).toBe(true);
+
+    const log = await cliRequestLog();
+    expect(log.length).toBe(0);
+  });
+
+  it('neither --base-url nor QA_AGENT_BASE_URL exits 2 with a specific message', () => {
+    const resultsPath = join(tmpDir, 'results.json');
+    const env = { ...process.env, QA_AGENT_TOKEN: TOKEN };
+    delete env.QA_AGENT_BASE_URL;
+
+    let threw = false;
+    try {
+      execFileSync(
+        process.execPath,
+        [API_CLIENT, '--method', 'GET', '--url', '/api/clients', '--results', resultsPath],
+        { env, encoding: 'utf8' }
+      );
+    } catch (err) {
+      threw = true;
+      expect(err.status).toBe(2);
+      expect(err.stderr.toString()).toContain('QA_AGENT_BASE_URL is not configured');
+    }
+    expect(threw).toBe(true);
+  });
+});
+
+describe('runCase — 401/403 verdict hint (T-01-18)', () => {
+  it('a 401 response produces a normal failed case whose verdict hints at a QA_AGENT_TOKEN problem', async () => {
+    const caseObj = await runCase({
+      method: 'GET',
+      url: '/api/unauthorized',
+      baseUrl: mock.url,
+      token: TOKEN,
+    });
+
+    expect(caseObj.status).toBe('failed');
+    expect(caseObj.evidence.response.status).toBe(401);
+    expect(caseObj.verdict).toContain('QA_AGENT_TOKEN');
   });
 });
 
