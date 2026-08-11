@@ -3,6 +3,12 @@ name: qa-agent
 description: Run an evidence-backed API test against a local or staging target. Use when asked to test, probar, validar, or run QA against API endpoints (e.g. "probá GET /api/clients", "testeá el CRUD de facturas", "validá el endpoint de login").
 argument-hint: [base-url] [instruction]
 allowed-tools: Bash, Read, Write, AskUserQuestion
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "node ${CLAUDE_SKILL_DIR}/scripts/confirm-destructive.mjs"
 ---
 
 # qa-agent
@@ -66,3 +72,28 @@ failures (D-09).
 Response-shape checks in this phase are labelled **"shape observed"**, not
 "contract validated" — no API specification exists yet, so any inferred shape
 check is a hint, not ground truth (D-10).
+
+## Confirmation protocol
+
+Every destructive call (DELETE always; POST/PUT/PATCH unless clearly
+read-only) is gated twice — once by `api-client.mjs`'s own exit-3 refusal,
+once by the `PreToolUse` hook above — but the *orchestrator's* job is to
+never even reach for `--confirmed` without first pausing. Run this loop for
+every case (D-03, D-04):
+
+1. Before invoking the client for a case, decide whether the call is
+   destructive using `references/destructive-classification.md`. DELETE is
+   always destructive.
+2. For a non-destructive POST/PUT/PATCH — a search or filter endpoint — pass
+   `--read-only-intent`, and state that judgment in the chat summary so the
+   developer can see what was waved through and why.
+3. Otherwise invoke the client without `--confirmed` first. It exits 3 and
+   returns a preview.
+4. Show the developer the preview verbatim — method, full URL, request body —
+   and ask via `AskUserQuestion` for a yes or no on that single call. Ask
+   about one call at a time; never batch several destructive calls into one
+   question and never request approval covering the remainder of the run.
+5. On yes, re-invoke the identical command with `--confirmed` appended.
+6. On no, invoke with `--declined` and a `--blocked-reason`, then continue
+   with the next case in the same session (D-04). A decline never ends the
+   run and never permanently bars that action from a later run (D-02).
