@@ -16,6 +16,7 @@ import {
   looksLikeProduction,
   preflight,
   readConfig,
+  redactHeaders,
   runCase,
 } from './api-client.mjs';
 import { startMockServer } from './__fixtures__/mock-server.mjs';
@@ -388,6 +389,30 @@ describe('runCase — evidence.request.auth mechanism (API-03)', () => {
     appendCase(resultsPath, caseObj, { baseUrl: mock.url });
     const resultsRaw = readFileSync(resultsPath, 'utf8');
     expect(resultsRaw).not.toContain(secretCookieValue);
+  });
+});
+
+describe('redactHeaders', () => {
+  it('redacts every credential-bearing header, including inbound set-cookie (CR-1, 02-REVIEW.md)', () => {
+    const redacted = redactHeaders({
+      authorization: 'Bearer secret-token',
+      cookie: 'session=abc123',
+      'set-cookie': 'session=rotated-value; HttpOnly',
+      'x-api-key': 'key-xyz',
+      'proxy-authorization': 'Basic secret',
+      'content-type': 'application/json',
+    });
+    expect(redacted.authorization).toBe('[REDACTED]');
+    expect(redacted.cookie).toBe('[REDACTED]');
+    expect(redacted['set-cookie']).toBe('[REDACTED]');
+    expect(redacted['x-api-key']).toBe('[REDACTED]');
+    expect(redacted['proxy-authorization']).toBe('[REDACTED]');
+    expect(redacted['content-type']).toBe('application/json');
+  });
+
+  it('matches header keys case-insensitively', () => {
+    const redacted = redactHeaders({ 'Set-Cookie': 'session=abc123' });
+    expect(redacted['Set-Cookie']).toBe('[REDACTED]');
   });
 });
 

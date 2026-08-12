@@ -58,14 +58,15 @@ export const DISPATCH = {
 const REDACTED_HEADER_KEYS = new Set([
   'authorization',
   'cookie',
+  'set-cookie',
   'x-api-key',
   'proxy-authorization',
 ]);
 
 /**
  * Returns a shallow copy of `headers` with the values of any credential-bearing
- * header (authorization, cookie, x-api-key, proxy-authorization — case-insensitive
- * key match) replaced by the literal string "[REDACTED]".
+ * header (authorization, cookie, set-cookie, x-api-key, proxy-authorization —
+ * case-insensitive key match) replaced by the literal string "[REDACTED]".
  */
 export function redactHeaders(headers) {
   const copy = {};
