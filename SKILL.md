@@ -9,6 +9,14 @@ hooks:
       hooks:
         - type: command
           command: "node ${CLAUDE_SKILL_DIR}/scripts/confirm-destructive.mjs"
+    - matcher: "mcp__playwright__browser_click"
+      hooks:
+        - type: command
+          command: "node ${CLAUDE_SKILL_DIR}/scripts/confirm-destructive-ui.mjs"
+    - matcher: "mcp__playwright__browser_fill_form"
+      hooks:
+        - type: command
+          command: "node ${CLAUDE_SKILL_DIR}/scripts/confirm-destructive-ui.mjs"
 ---
 
 # qa-agent
@@ -187,3 +195,48 @@ every case (D-03, D-04):
 6. On no, invoke with `--declined` and a `--blocked-reason`, then continue
    with the next case in the same session (D-04). A decline never ends the
    run and never permanently bars that action from a later run (D-02).
+
+## UI confirmation protocol
+
+The same confirmation-gate philosophy extends to the browser (D-05, D-06):
+before clicking, typing into, or filling any element from a Playwright MCP
+`browser_snapshot`, the agent pauses on a destructive-looking one and asks,
+exactly as the API gate above pauses on a mutating method. Two independent
+layers back this up: the orchestrator's own classification below is the
+primary block, and the `PreToolUse` hook registered in frontmatter for
+`mcp__playwright__browser_click`/`browser_fill_form` is the hardening layer,
+mirroring Phase 1's Bash-command hook exactly (SC1, D-05). **The hook layer's
+live-session firing is unverified as of Phase 1's UAT (Test 4)** — a
+skill-frontmatter `PreToolUse` hook was not observed firing in that session,
+root cause undiagnosed. Do not read the hook's mere presence in frontmatter
+as proof of enforcement; the orchestrator-level pause below is the guarantee
+this protocol actually rests on.
+
+Run this loop for every interaction against an element from a snapshot:
+
+1. After every `browser_snapshot`, before issuing any click, type or
+   form-fill against an element from that snapshot, read the element's role,
+   accessible name and aria-label out of the snapshot and classify it using
+   `references/ui-destructive-classification.md`.
+2. If the element is not destructive, issue the single interaction tool call
+   and continue.
+3. If it is destructive, or if it has no readable accessible name, stop. Show
+   the developer the element's visible text, its aria-label, its snapshot ref
+   and the current page URL, and ask via `AskUserQuestion` for a yes or no on
+   that one interaction. Ask about one element at a time. Never batch several
+   destructive clicks into one question, and never request approval covering
+   the remainder of the run — there is no bulk-approval mode in this skill,
+   in the browser any more than in the API.
+4. On yes, issue that one interaction tool call, then re-snapshot before
+   doing anything else.
+5. On no, do not issue the tool call. Record the step as blocked with the
+   reason and continue with the next case in the same session — a decline
+   never ends the run and never permanently bars that action from a later
+   run. The concrete recorder invocation for a blocked UI case is documented
+   in the `## UI run protocol` section.
+6. Never show a value being typed in a confirmation prompt. Show the field's
+   label only.
+7. Never route around a gate by using a JavaScript-evaluation tool to trigger
+   an element directly. If a gated element cannot be interacted with through
+   the normal UI surface, report that and stop, rather than reaching for a
+   different mechanism.
