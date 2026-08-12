@@ -28,11 +28,21 @@ produces at run time — there is no project-specific setup step (PKG-01).
 
 ## Configuration
 
-- `QA_AGENT_TOKEN` (required) — the test user's bearer token, exported in the
-  shell that launched Claude Code, or set in the target project's
-  `.env.local`. Sent as `Authorization: Bearer <token>` on every request.
+- `QA_AGENT_TOKEN` (required for API-only runs) — the test user's bearer
+  token, exported in the shell that launched Claude Code, or set in the
+  target project's `.env.local`. Sent as `Authorization: Bearer <token>` on
+  every request.
 - `QA_AGENT_BASE_URL` (optional) — a default base URL, overridden by the
   first argument to `/qa-agent` when one is supplied.
+- `QA_AGENT_UI_USER` / `QA_AGENT_UI_PASSWORD` (required together, only when a
+  run needs a browser login) — the dedicated test user's login credentials
+  for `ui-login.mjs`, loaded from the shell environment or the target
+  project's `.env.local` exactly like `QA_AGENT_TOKEN`. These belong to a
+  low-privilege, dedicated test account — **never** a real user's own login.
+  Never required for an API-only run. If a UI login is requested and either
+  variable is unset, empty, or whitespace-only, the run stops with a
+  configuration error naming both variable names — it never attempts a login
+  with an empty credential.
 
 When `QA_AGENT_TOKEN` is missing, the run stops immediately with a
 configuration error message. It never proceeds with a missing or empty
@@ -42,16 +52,55 @@ failures (D-09).
 `api-client.mjs`'s exit codes — a configuration error (2), a refused
 confirmation (3), an unreachable target (4), or a refused production-looking
 host (6) **stops the run**; it is never rendered into the report as if it
-were a test failure (D-09):
+were a test failure (D-09). `ui-login.mjs` reuses the same codes for the
+meanings they share (2 configuration, 4 unreachable target), so a developer
+reads one table, not two:
 
 | Exit code | Meaning |
 |-----------|---------|
 | 0 | Case recorded — passed, failed, or blocked (`--declined`) are all a successful run of the script |
-| 2 | Configuration error — `QA_AGENT_BASE_URL is not configured` or `QA_AGENT_TOKEN is not configured` |
+| 2 | Configuration error — `QA_AGENT_BASE_URL is not configured`, `QA_AGENT_TOKEN is not configured`, or (`ui-login.mjs`) `QA_AGENT_UI_USER`/`QA_AGENT_UI_PASSWORD` not configured |
 | 3 | Confirmation required — a destructive call was dispatched without `--confirmed`, nothing was sent |
-| 4 | Target unreachable — either the preflight probe or the dispatch itself hit a transport-level failure |
+| 4 | Target unreachable — either the preflight probe, the dispatch itself, or (`ui-login.mjs`) reaching the login page hit a transport-level failure |
 | 5 | Evidence missing — `format-report.mjs` refused to render a passed/failed case with no response evidence |
 | 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
+| 7 | Login failed (`ui-login.mjs` only) — the login form was found but the supplied `QA_AGENT_UI_USER` was rejected, or no post-login state change occurred; no storage-state file is written |
+
+## UI authentication and session reuse
+
+When a run needs to act as a logged-in test user in the browser, and reuse
+that same session for related API calls, follow this two-step sequence
+(EXEC-03, API-03, D-07, D-08):
+
+1. Run the login script through the Bash tool — never drive the login form
+   interactively:
+   ```
+   node <skill-dir>/scripts/ui-login.mjs --base-url <base-url> \
+     --storage-state <target-project>/qa-reports/<run-id>-storage-state.json
+   ```
+   Capture the `storageStatePath` from its single JSON output line
+   (`{"status":"logged_in","storageStatePath":...,"postLoginUrl":...,"cookieNames":[...]}`).
+2. For every API case in the same run that should act as that logged-in
+   user, append `--storage-state <that path>` to the `api-client.mjs`
+   invocation. No second login, and no `QA_AGENT_TOKEN` is required for
+   those cases (API-03, D-07).
+
+**Credential isolation is a rule the orchestrator must follow, not
+background detail.** `QA_AGENT_UI_PASSWORD` is read from the environment
+strictly inside `ui-login.mjs`'s own process — it is never passed as an
+argument to any tool call, never echoed into chat, and never typed into a
+browser through an interactive tool. This is exactly why login is
+script-driven instead of orchestrator-issued Playwright MCP tool calls
+(D-08): an MCP tool call would require the orchestrator's own reasoning to
+construct the password as a literal string argument, putting it in the
+conversation transcript. If a login step fails, report the exit code and the
+script's own message — never retry by asking the developer to paste the
+password into the conversation.
+
+**A storage-state file is a live session credential**, equivalent to a
+cookie jar — treat it exactly that way. Reference it only by path, never
+print its contents into chat, `results.json`, or the Markdown report, and
+leave it inside the already-gitignored `qa-reports/` run directory.
 
 ## Run protocol
 
