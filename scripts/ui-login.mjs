@@ -17,7 +17,7 @@
 //   7 = LoginFailedError (credentials rejected, or no post-login signal)
 // Codes 3, 5 and 6 stay reserved for their api-client.mjs meanings.
 
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -170,6 +170,15 @@ export async function performLogin({
     const resolvedPath = resolve(storageStatePath);
     mkdirSync(dirname(resolvedPath), { recursive: true });
     await context.storageState({ path: resolvedPath });
+    // The storage-state file is a live session credential (T-02-02) — tighten
+    // to owner-read/write where the filesystem supports it. Best-effort: some
+    // filesystems (Windows) don't honour POSIX mode bits, so a failure here
+    // must never fail the login itself.
+    try {
+      chmodSync(resolvedPath, 0o600);
+    } catch {
+      // ignored — filesystem does not support chmod (e.g. Windows/FAT)
+    }
 
     const written = JSON.parse(readFileSync(resolvedPath, 'utf8'));
     const cookieNames = (written.cookies ?? []).map((c) => c.name);

@@ -4,13 +4,14 @@
 // preflight/production-target safety (Task 3) of plan 01-04.
 
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   DISPATCH,
+  appendCase,
   buildShapeSchema,
   looksLikeProduction,
   preflight,
@@ -259,6 +260,134 @@ describe('readConfig — baseUrlArg vs QA_AGENT_BASE_URL (D-09)', () => {
   it('resolves to the explicit argument when both are set — the argument wins', () => {
     const config = readConfig({ baseUrlArg: 'http://explicit:1234', projectRoot: tmpDir });
     expect(config.baseUrl).toBe('http://explicit:1234');
+  });
+});
+
+describe('readConfig — auth-mechanism coverage (API-03, RESEARCH Pitfall 4)', () => {
+  const ORIGINAL_TOKEN = process.env.QA_AGENT_TOKEN;
+
+  afterEach(() => {
+    if (ORIGINAL_TOKEN === undefined) delete process.env.QA_AGENT_TOKEN;
+    else process.env.QA_AGENT_TOKEN = ORIGINAL_TOKEN;
+  });
+
+  it('with a token and no storageStatePath, behaves exactly as before', () => {
+    process.env.QA_AGENT_TOKEN = TOKEN;
+    const config = readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir });
+    expect(config.token).toBe(TOKEN);
+    expect(config.storageStatePath).toBeUndefined();
+  });
+
+  it('with a storageStatePath pointing at a real file and no QA_AGENT_TOKEN, returns without throwing', () => {
+    delete process.env.QA_AGENT_TOKEN;
+    const storageStatePath = join(tmpDir, 'real-storage-state.json');
+    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
+
+    const config = readConfig({
+      baseUrlArg: 'http://example.invalid',
+      projectRoot: tmpDir,
+      storageStatePath,
+    });
+    expect(config.token).toBeUndefined();
+    expect(config.storageStatePath).toBe(storageStatePath);
+  });
+
+  it('with neither a token nor a storageStatePath, throws ConfigError naming both QA_AGENT_TOKEN and --storage-state', () => {
+    delete process.env.QA_AGENT_TOKEN;
+    let threw = false;
+    try {
+      readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir });
+    } catch (err) {
+      threw = true;
+      expect(err.message).toContain('QA_AGENT_TOKEN');
+      expect(err.message).toContain('--storage-state');
+    }
+    expect(threw).toBe(true);
+  });
+
+  it('with a storageStatePath pointing at a file that does not exist, throws ConfigError naming that path', () => {
+    process.env.QA_AGENT_TOKEN = TOKEN;
+    const missingPath = join(tmpDir, 'does-not-exist-storage-state.json');
+
+    let threw = false;
+    try {
+      readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir, storageStatePath: missingPath });
+    } catch (err) {
+      threw = true;
+      expect(err.message).toContain(missingPath);
+    }
+    expect(threw).toBe(true);
+  });
+});
+
+describe('runCase — evidence.request.auth mechanism (API-03)', () => {
+  it('records mechanism "bearer" with a token and no storageStatePath', async () => {
+    const caseObj = await runCase({ method: 'GET', url: '/api/clients', baseUrl: mock.url, token: TOKEN });
+    expect(caseObj.evidence.request.auth).toEqual({ mechanism: 'bearer', storageStateFile: null });
+  });
+
+  it('records mechanism "storageState" with only a storageStatePath, and storageStateFile as the basename only', async () => {
+    const storageStatePath = join(tmpDir, 'auth-mechanism-storage-state.json');
+    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
+
+    const caseObj = await runCase({
+      method: 'GET',
+      url: '/api/clients',
+      baseUrl: mock.url,
+      storageStatePath,
+    });
+    expect(caseObj.evidence.request.auth.mechanism).toBe('storageState');
+    expect(caseObj.evidence.request.auth.storageStateFile).toBe('auth-mechanism-storage-state.json');
+    expect(JSON.stringify(caseObj)).not.toContain(tmpDir.replace(/\\/g, '\\\\'));
+  });
+
+  it('records mechanism "both" when a token and a storageStatePath are both present', async () => {
+    const storageStatePath = join(tmpDir, 'both-mechanism-storage-state.json');
+    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
+
+    const caseObj = await runCase({
+      method: 'GET',
+      url: '/api/clients',
+      baseUrl: mock.url,
+      token: TOKEN,
+      storageStatePath,
+    });
+    expect(caseObj.evidence.request.auth.mechanism).toBe('both');
+  });
+
+  it('no case object anywhere in a results file contains any cookie value from the storage-state file', async () => {
+    const storageStatePath = join(tmpDir, 'cookie-secrecy-storage-state.json');
+    const secretCookieValue = 'super-secret-session-token-value';
+    writeFileSync(
+      storageStatePath,
+      JSON.stringify({
+        cookies: [
+          {
+            name: 'qa_session',
+            value: secretCookieValue,
+            domain: '127.0.0.1',
+            path: '/',
+            expires: -1,
+            httpOnly: true,
+            secure: false,
+            sameSite: 'Lax',
+          },
+        ],
+        origins: [],
+      })
+    );
+
+    const caseObj = await runCase({
+      method: 'GET',
+      url: '/api/clients',
+      baseUrl: mock.url,
+      storageStatePath,
+    });
+
+    const resultsPath = join(tmpDir, 'cookie-secrecy-results.json');
+    appendCase(resultsPath, caseObj, { baseUrl: mock.url });
+    const resultsRaw = readFileSync(resultsPath, 'utf8');
+    expect(resultsRaw).not.toContain(secretCookieValue);
   });
 });
 

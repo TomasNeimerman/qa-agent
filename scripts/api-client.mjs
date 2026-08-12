@@ -99,13 +99,28 @@ export function readConfig({ baseUrlArg, projectRoot, storageStatePath } = {}) {
     );
   }
 
+  // A mistyped --storage-state path must never silently degrade into an
+  // unauthenticated request (RESEARCH Pitfall 4, T-02-05) — checked before
+  // the auth-mechanism check below so a typo is named specifically, even
+  // when a QA_AGENT_TOKEN is also present.
+  if (storageStatePath && !existsSync(storageStatePath)) {
+    throw new ConfigError(
+      `--storage-state points at a file that does not exist: ${storageStatePath} — check the path from the prior UI login, or omit the flag to run without a UI session`
+    );
+  }
+
   const token = process.env.QA_AGENT_TOKEN;
   // A Phase 2 UI-driven run has no QA_AGENT_TOKEN at all but does have a
   // valid storageStatePath from a prior UI login (API-03) — that is not a
   // missing-auth condition. Throw only when neither mechanism is present.
+  // The message keeps Phase 1's literal "QA_AGENT_TOKEN is not configured"
+  // phrasing (relied on by 01-04's tracer.e2e.test.mjs) while also naming
+  // --storage-state as the second, equally valid mechanism.
   if (!token && !storageStatePath) {
     throw new ConfigError(
-      "QA_AGENT_TOKEN is not configured — export it in the shell that launched Claude Code, or set it in the target project's .env.local"
+      "QA_AGENT_TOKEN is not configured, and no --storage-state path was given — export " +
+        "QA_AGENT_TOKEN in the shell that launched Claude Code (or set it in the target " +
+        "project's .env.local), or pass --storage-state <path> from a prior UI login (API-03)."
     );
   }
 
