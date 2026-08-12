@@ -20,14 +20,18 @@
 // the guarantee): 1) confirmation gate — nothing is sent and no credential
 // is read for an unconfirmed/declined destructive call; 2) production-target
 // check — refuses a production-looking host before the token is even read;
-// 3) readConfig — resolves QA_AGENT_BASE_URL / QA_AGENT_TOKEN, loud failure
-// (exit 2) if either is missing; 4) preflight — a single reachability probe
-// against the resolved base URL; 5) dispatch — runCase actually sends the
-// request. Widening the method set (this plan) or adding new checks later
-// must preserve this order, not add a bypass around any earlier step.
+// 3) readConfig — resolves QA_AGENT_BASE_URL and an auth mechanism (a
+// QA_AGENT_TOKEN bearer token, a --storage-state path from a prior UI login,
+// or both — see API-03), loud failure (exit 2) if the base URL is missing or
+// no auth mechanism at all is present; storage-state path resolution happens
+// inside this same step, so it still sits behind the confirmation gate;
+// 4) preflight — a single reachability probe against the resolved base URL;
+// 5) dispatch — runCase actually sends the request. Widening the method set
+// or adding new checks later must preserve this order, not add a bypass
+// around any earlier step.
 
+import { basename, dirname, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { request } from 'playwright';
@@ -78,7 +82,7 @@ export function redactHeaders(headers) {
  * Throws ConfigError with a specific, actionable message when either value is
  * absent — this is D-09's "fail loudly, never send an empty Authorization header".
  */
-export function readConfig({ baseUrlArg, projectRoot } = {}) {
+export function readConfig({ baseUrlArg, projectRoot, storageStatePath } = {}) {
   const root = projectRoot ?? process.cwd();
 
   for (const filename of ['.env.local', '.env']) {
@@ -96,13 +100,16 @@ export function readConfig({ baseUrlArg, projectRoot } = {}) {
   }
 
   const token = process.env.QA_AGENT_TOKEN;
-  if (!token) {
+  // A Phase 2 UI-driven run has no QA_AGENT_TOKEN at all but does have a
+  // valid storageStatePath from a prior UI login (API-03) — that is not a
+  // missing-auth condition. Throw only when neither mechanism is present.
+  if (!token && !storageStatePath) {
     throw new ConfigError(
       "QA_AGENT_TOKEN is not configured — export it in the shell that launched Claude Code, or set it in the target project's .env.local"
     );
   }
 
-  return { baseUrl, token };
+  return { baseUrl, token, storageStatePath };
 }
 
 const NON_PROD_KEYWORDS = ['staging', 'stage', 'dev', 'test', 'qa', 'preview', 'sandbox'];
@@ -164,10 +171,11 @@ export function looksLikeProduction(baseUrl) {
  * target fails the whole run fast (exit 4) instead of producing a report
  * full of misleading per-case failures (RESEARCH Environment Availability).
  */
-export async function preflight(baseUrl, token) {
+export async function preflight(baseUrl, token, storageStatePath) {
   const context = await request.newContext({
     baseURL: baseUrl,
     extraHTTPHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+    storageState: storageStatePath ?? undefined,
     timeout: 5000,
   });
 
@@ -245,6 +253,7 @@ export async function runCase({
   body,
   baseUrl,
   token,
+  storageStatePath,
   expectStatus,
   expectFields,
 }) {
@@ -255,11 +264,13 @@ export async function runCase({
   }
 
   const absoluteUrl = new URL(url, baseUrl).toString();
-  const requestHeaders = { Authorization: `Bearer ${token}` };
+  const requestHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const authMechanism = token && storageStatePath ? 'both' : token ? 'bearer' : storageStatePath ? 'storageState' : 'none';
 
   const context = await request.newContext({
     baseURL: baseUrl,
     extraHTTPHeaders: requestHeaders,
+    storageState: storageStatePath ?? undefined,
   });
 
   try {
@@ -341,6 +352,10 @@ export async function runCase({
           url: absoluteUrl,
           headers: redactHeaders(requestHeaders),
           body: body ?? null,
+          auth: {
+            mechanism: authMechanism,
+            storageStateFile: storageStatePath ? basename(storageStatePath) : null,
+          },
         },
         response: {
           status,
@@ -434,6 +449,8 @@ async function main() {
   const blockedReasonArg = typeof args['blocked-reason'] === 'string' ? args['blocked-reason'] : undefined;
   const allowNonLocal = Boolean(args['allow-non-local']);
   const baseUrlForPreview = args['base-url'] ?? process.env.QA_AGENT_BASE_URL;
+  const storageStateArg =
+    typeof args['storage-state'] === 'string' ? resolve(args['storage-state']) : undefined;
 
   // The destructive-action gate (D-01–D-04) is evaluated here, before
   // readConfig() resolves the auth token, so an unconfirmed/declined
@@ -500,7 +517,11 @@ async function main() {
 
   let config;
   try {
-    config = readConfig({ baseUrlArg: args['base-url'], projectRoot });
+    config = readConfig({
+      baseUrlArg: args['base-url'],
+      projectRoot,
+      storageStatePath: storageStateArg,
+    });
   } catch (err) {
     if (err instanceof ConfigError) {
       process.stderr.write(`${err.message}\n`);
@@ -510,7 +531,7 @@ async function main() {
   }
 
   try {
-    await preflight(config.baseUrl, config.token);
+    await preflight(config.baseUrl, config.token, config.storageStatePath);
   } catch (err) {
     process.stderr.write(`${err.message}\n`);
     process.exit(4);
@@ -525,6 +546,7 @@ async function main() {
       title,
       body,
       baseUrl: config.baseUrl,
+      storageStatePath: config.storageStatePath,
       token: config.token,
       expectStatus,
       expectFields,
