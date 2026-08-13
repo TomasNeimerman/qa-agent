@@ -3,3 +3,4 @@ qa-reports/
 *.results.json
 .env
 .env.local
+.planning/research/.cache/
