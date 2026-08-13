@@ -1,6 +1,7 @@
 node_modules/
 qa-reports/
 *.results.json
+*storage-state.json
 .env
 .env.local
 .planning/research/.cache/

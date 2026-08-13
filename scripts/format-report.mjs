@@ -5,6 +5,14 @@
 // that is missing response evidence — this is SAFE-03's technical
 // enforcement. Blocked (pending-confirmation) cases are exempt: a null
 // response is the correct, expected shape for an action that was never sent.
+//
+// A case with `kind: 'ui'` (produced by scripts/ui-case.mjs) renders through
+// a separate branch inside renderCase (renderUiCase) but shares this same
+// results.json, the same renderReport/summarise/chatSummary and the same
+// evidence rule — a browser verdict with no captured accessibility snapshot
+// is refused here exactly as an HTTP verdict with no response is. A case
+// with no `kind` field, which is every case Phase 1 ever wrote, is untouched
+// by this addition and renders exactly as it always has.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -98,12 +106,129 @@ export function deriveReproSteps(caseObj, run = {}) {
 }
 
 /**
+ * Composes reproduction steps for a failed UI case purely from stored
+ * evidence — evidence.request.url/action/element, checks, and
+ * evidence.response.url — never from a narrative field, so a fabricated
+ * repro step is structurally impossible here either. The authenticated
+ * session is referred to only by its environment-variable name
+ * ($QA_AGENT_UI_USER), never by a credential value, matching how
+ * deriveReproSteps refers to $QA_AGENT_TOKEN.
+ */
+export function deriveUiReproSteps(caseObj, run = {}) {
+  const url = caseObj?.evidence?.request?.url ?? '(unknown URL)';
+  const action = caseObj?.evidence?.request?.action ?? '?';
+  const element = caseObj?.evidence?.request?.element ?? '(unnamed element)';
+  const postActionUrl = caseObj?.evidence?.response?.url ?? url;
+
+  const checks = caseObj?.checks ?? [];
+  const failedCheck = checks.find((c) => !c.passed);
+
+  const steps = [];
+  steps.push(
+    `Open ${url} in a browser session authenticated as $QA_AGENT_UI_USER (the QA test user).`
+  );
+  steps.push(`Perform "${action}" against the element with the accessible name "${element}".`);
+  if (failedCheck) {
+    steps.push(
+      `Observed ${JSON.stringify(failedCheck.actual)}, expected ${JSON.stringify(failedCheck.expected)} (post-action URL: ${postActionUrl}).`
+    );
+  } else {
+    steps.push(`Observed page at ${postActionUrl} did not match the expected outcome.`);
+  }
+
+  return steps;
+}
+
+/**
+ * Renders a single UI case section — branch taken by renderCase before the
+ * API passed/failed/blocked logic below, so a case with no `kind` (every
+ * case Phase 1 ever wrote) never reaches this function. Applies the same
+ * evidence rule the HTTP path enforces, reusing EvidenceMissingError rather
+ * than introducing a second error class: a passed or failed UI case with an
+ * absent or empty evidence.response.snapshot throws here — the render-time
+ * layer backing up scripts/ui-case.mjs's construction-time refusal (both are
+ * needed for the same reason the destructive gate has two).
+ */
+function renderUiCase(caseObj, index, run = {}) {
+  const { id, status, evidence, checks, verdict, blockedReason } = caseObj;
+  const action = evidence?.request?.action ?? '?';
+  const element = evidence?.request?.element ?? '(unnamed element)';
+  const url = evidence?.request?.url ?? '?';
+  const statusLabel = String(status ?? '').toUpperCase();
+
+  if ((status === 'passed' || status === 'failed') && !evidence?.response?.snapshot) {
+    throw new EvidenceMissingError(
+      `EVIDENCE_MISSING: case ${id ?? index} has status "${status}" but no captured accessibility snapshot`
+    );
+  }
+
+  const lines = [];
+  lines.push(`## Case ${index} — UI: ${action} "${element}" — ${statusLabel}`);
+  lines.push('');
+
+  if (status === 'blocked') {
+    lines.push('**Action (not performed):**');
+    lines.push(`- Action: \`${action}\``);
+    lines.push(`- Element: \`${element}\``);
+    lines.push(`- Page URL: \`${url}\``);
+    lines.push('');
+    lines.push(`**Status:** ${blockedReason ?? 'Destructive action detected — step skipped.'}`);
+    lines.push(
+      'No interaction was performed for this case — this destructive action was detected and paused before it was issued.'
+    );
+    lines.push('');
+  } else {
+    lines.push('**Action:**');
+    lines.push(`- Action: \`${action}\``);
+    lines.push(`- Element: \`${element}\``);
+    lines.push(`- Page URL: \`${url}\``);
+    lines.push('');
+    lines.push('**Evidence:**');
+    lines.push('- Snapshot:');
+    lines.push('```');
+    lines.push(evidence.response.snapshot);
+    lines.push('```');
+    if (evidence.response.screenshot) {
+      lines.push(`- Screenshot: \`${evidence.response.screenshot}\``);
+    }
+    lines.push(`- Observed URL after action: \`${evidence.response.url ?? url}\``);
+    lines.push('');
+    lines.push('**Checks:**');
+    lines.push(...renderChecks(checks));
+    lines.push('');
+    lines.push(`**Verdict:** ${verdict ?? statusLabel}`);
+    lines.push('');
+
+    if (status === 'failed') {
+      const steps =
+        caseObj.reproSteps && caseObj.reproSteps.length > 0
+          ? caseObj.reproSteps
+          : deriveUiReproSteps(caseObj, run);
+      lines.push('**Reproduction steps:**');
+      steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
+      lines.push('');
+    }
+  }
+
+  lines.push('---');
+
+  return lines.join('\n');
+}
+
+/**
  * Renders a single case section. Throws EvidenceMissingError if the case's
  * status is passed/failed but evidence.response is null or absent — no
  * verdict may be rendered without the evidence that backs it (SAFE-03).
  * Blocked cases are exempt: a null response is the expected shape there.
+ * A case whose `kind` is `ui` (scripts/ui-case.mjs's output) is delegated to
+ * renderUiCase before any of the logic below runs; the API path below is
+ * left byte-identical in behaviour for every other case.
  */
 export function renderCase(caseObj, index, run = {}) {
+  if (caseObj?.kind === 'ui') {
+    return renderUiCase(caseObj, index, run);
+  }
+
   const { id, status, evidence, checks, verdict, blockedReason, reproSteps } = caseObj;
   const method = evidence?.request?.method ?? '?';
   const url = evidence?.request?.url ?? '?';
@@ -136,6 +261,13 @@ export function renderCase(caseObj, index, run = {}) {
     lines.push(`- URL: \`${url}\``);
     lines.push(`- Headers: ${renderHeaders(evidence?.request?.headers)}`);
     lines.push(`- Body: ${renderBody(evidence?.request?.body)}`);
+    if (evidence?.request?.auth?.mechanism) {
+      const authFile = evidence.request.auth.storageStateFile;
+      lines.push(
+        `- Auth: \`${evidence.request.auth.mechanism}\`` +
+          (authFile ? ` (session file: \`${authFile}\`)` : '')
+      );
+    }
     lines.push('');
     lines.push('**Response:**');
     lines.push(`- Status: \`${evidence.response.status}\``);

@@ -9,6 +9,7 @@ import {
   EvidenceMissingError,
   chatSummary,
   deriveReproSteps,
+  deriveUiReproSteps,
   renderCase,
   renderReport,
   reportFileName,
@@ -107,6 +108,88 @@ function fourCaseResults() {
     schemaVersion: 1,
     run: makeRun(),
     cases: [passedCase(), passedCase2(), failedCase(), blockedCase()],
+  };
+}
+
+function apiCaseWithStorageStateAuth() {
+  return {
+    id: 'case-auth-1',
+    title: 'GET /api/me',
+    status: 'passed',
+    evidence: {
+      request: {
+        method: 'GET',
+        url: '/api/me',
+        headers: { Cookie: '[REDACTED]' },
+        body: null,
+        auth: { mechanism: 'storageState', storageStateFile: '2026-08-12-2200-storage-state.json' },
+      },
+      response: { status: 200, ok: true, headers: {}, body: { id: 1 }, durationMs: 6 },
+    },
+    checks: [{ name: 'status', kind: 'status', expected: '2xx', actual: 200, passed: true }],
+    verdict: 'PASSED — status 200',
+    reproSteps: [],
+    blockedReason: null,
+  };
+}
+
+function passedUiCase() {
+  return {
+    id: 'case-ui-1',
+    title: 'alta de cliente',
+    status: 'passed',
+    kind: 'ui',
+    evidence: {
+      request: { method: 'UI', url: 'http://x.test/clients/new', action: 'click', element: 'Guardar', body: null, headers: {} },
+      response: { snapshot: 'button "Guardar" [ref=e9]', screenshot: null, url: 'http://x.test/clients/new', durationMs: 120 },
+    },
+    checks: [{ name: 'click on Guardar completed', kind: 'ui-observed', expected: 'completed', actual: 'completed', passed: true }],
+    verdict: 'PASSED — click on "Guardar" at http://x.test/clients/new',
+    reproSteps: [],
+    blockedReason: null,
+  };
+}
+
+function passedUiCaseWithScreenshot() {
+  const c = passedUiCase();
+  c.id = 'case-ui-2';
+  c.evidence.response.screenshot = '/tmp/qa-reports/run-1-case-2.png';
+  return c;
+}
+
+function failedUiCase() {
+  return {
+    id: 'case-ui-3',
+    title: 'alta de cliente falla',
+    status: 'failed',
+    kind: 'ui',
+    evidence: {
+      request: { method: 'UI', url: 'http://x.test/clients/new', action: 'submit', element: 'Guardar', body: null, headers: {} },
+      response: { snapshot: 'alert "error de validacion"', screenshot: null, url: 'http://x.test/clients/new', durationMs: 90 },
+    },
+    checks: [
+      { name: 'submit outcome', kind: 'ui-observed', expected: 'lista con el cliente nuevo', actual: 'error de validacion', passed: false },
+    ],
+    verdict: 'FAILED — submit on "Guardar" at http://x.test/clients/new; submit outcome failed',
+    reproSteps: [],
+    blockedReason: null,
+  };
+}
+
+function blockedUiCase() {
+  return {
+    id: 'case-ui-4',
+    title: 'eliminar cliente',
+    status: 'blocked',
+    kind: 'ui',
+    evidence: {
+      request: { method: 'UI', url: 'http://x.test/clients/1', action: 'click', element: 'Eliminar', body: null, headers: {} },
+      response: null,
+    },
+    checks: [],
+    verdict: 'NOT EXECUTED — blocked',
+    reproSteps: [],
+    blockedReason: 'The developer declined confirmation for this destructive click.',
   };
 }
 
@@ -313,5 +396,112 @@ describe('renderReport — zero cases', () => {
       markdown = renderReport(results);
     }).not.toThrow();
     expect(markdown).toContain('0 passed · 0 failed · 0 blocked (pending confirmation)');
+  });
+});
+
+describe('renderCase — UI cases (kind: "ui")', () => {
+  it('a passed UI case names the action, the element and the page URL, and quotes the stored snapshot in a fenced block', () => {
+    const section = renderCase(passedUiCase(), 1, { baseUrl: 'http://x.test' });
+    expect(section).toContain('click');
+    expect(section).toContain('Guardar');
+    expect(section).toContain('http://x.test/clients/new');
+    expect(section).toContain('```');
+    expect(section).toContain('button "Guardar" [ref=e9]');
+  });
+
+  it('a UI case carrying a screenshot path renders that path', () => {
+    const section = renderCase(passedUiCaseWithScreenshot(), 1, { baseUrl: 'http://x.test' });
+    expect(section).toContain('/tmp/qa-reports/run-1-case-2.png');
+  });
+
+  it('throws EvidenceMissingError for a passed UI case whose evidence.response.snapshot is missing', () => {
+    const c = passedUiCase();
+    c.evidence.response.snapshot = '';
+    expect(() => renderCase(c, 1, {})).toThrow(EvidenceMissingError);
+  });
+
+  it('throws EvidenceMissingError for a failed UI case whose evidence.response is absent entirely', () => {
+    const c = failedUiCase();
+    delete c.evidence.response;
+    expect(() => renderCase(c, 1, {})).toThrow(EvidenceMissingError);
+  });
+
+  it('a blocked UI case renders the action/element as not performed and the blockedReason, without throwing despite the null response', () => {
+    let section;
+    expect(() => {
+      section = renderCase(blockedUiCase(), 1, {});
+    }).not.toThrow();
+    expect(section).toContain('not performed');
+    expect(section).toContain('click');
+    expect(section).toContain('Eliminar');
+    expect(section).toContain('The developer declined confirmation for this destructive click.');
+  });
+
+  it('a failed UI case renders a Reproduction steps block', () => {
+    const section = renderCase(failedUiCase(), 1, { baseUrl: 'http://x.test' });
+    expect(section).toContain('**Reproduction steps:**');
+  });
+
+  it('a passed UI case renders no Reproduction steps block', () => {
+    const section = renderCase(passedUiCase(), 1, { baseUrl: 'http://x.test' });
+    expect(section).not.toContain('**Reproduction steps:**');
+  });
+});
+
+describe('deriveUiReproSteps', () => {
+  it('for a failed UI case, produces at least 3 steps composed only from stored evidence: URL, action+element, and the observed-vs-expected line', () => {
+    const c = failedUiCase();
+    const steps = deriveUiReproSteps(c, { baseUrl: 'http://x.test' });
+    expect(steps.length).toBeGreaterThanOrEqual(3);
+    expect(steps[0]).toContain('http://x.test/clients/new');
+    expect(steps[0]).toContain('$QA_AGENT_UI_USER');
+    expect(steps[1]).toContain('submit');
+    expect(steps[1]).toContain('Guardar');
+    expect(steps.some((s) => s.includes('error de validacion') && s.includes('lista con el cliente nuevo'))).toBe(true);
+  });
+
+  it('never composes a step from a free-text field not present in evidence/checks', () => {
+    const c = failedUiCase();
+    c.title = 'a title that must never leak into repro steps — sentinel-xyz';
+    const steps = deriveUiReproSteps(c, { baseUrl: 'http://x.test' });
+    expect(steps.join('|')).not.toContain('sentinel-xyz');
+  });
+});
+
+describe('renderReport — mixed API and UI cases', () => {
+  it('renders every case in original order and sums both kinds into one set of counts', () => {
+    const cases = [passedCase(), passedUiCase(), failedUiCase(), blockedUiCase()];
+    const results = { schemaVersion: 1, run: makeRun(), cases };
+
+    const counts = summarise(cases);
+    expect(counts).toEqual({ passed: 2, failed: 1, blocked: 1, total: 4 });
+
+    const markdown = renderReport(results);
+    const apiIndex = markdown.indexOf('## Case 1');
+    const uiPassedIndex = markdown.indexOf('## Case 2');
+    const uiFailedIndex = markdown.indexOf('## Case 3');
+    const uiBlockedIndex = markdown.indexOf('## Case 4');
+    expect(apiIndex).toBeGreaterThanOrEqual(0);
+    expect(apiIndex).toBeLessThan(uiPassedIndex);
+    expect(uiPassedIndex).toBeLessThan(uiFailedIndex);
+    expect(uiFailedIndex).toBeLessThan(uiBlockedIndex);
+    expect(markdown).toContain('2 passed');
+    expect(markdown).toContain('1 failed');
+    expect(markdown).toContain('1 blocked (pending confirmation)');
+  });
+});
+
+describe('renderCase — API auth mechanism rendering', () => {
+  it('renders the authentication mechanism when evidence.request.auth is present, with no cookie or token value', () => {
+    const section = renderCase(apiCaseWithStorageStateAuth(), 1, {});
+    expect(section.toLowerCase()).toContain('storagestate');
+    expect(section).toContain('2026-08-12-2200-storage-state.json');
+    expect(section).not.toContain('qa_session=');
+    expect(section).toContain('[REDACTED]');
+  });
+
+  it('renders no Auth line when evidence.request.auth is absent (existing API cases unaffected)', () => {
+    const section = renderCase(passedCase(), 1, {});
+    expect(section).not.toContain('- Auth:');
   });
 });

@@ -2,13 +2,26 @@
 name: qa-agent
 description: Run an evidence-backed API test against a local or staging target. Use when asked to test, probar, validar, or run QA against API endpoints (e.g. "probá GET /api/clients", "testeá el CRUD de facturas", "validá el endpoint de login").
 argument-hint: [base-url] [instruction]
-allowed-tools: Bash, Read, Write, AskUserQuestion
+# allowed-tools deliberately excludes any JavaScript-evaluation tool (e.g.
+# browser_evaluate) — an arbitrary-script capability would let a stuck flow
+# be "unblocked" by executing code in the page, routing around both the
+# destructive-action gate and the rule that this skill only operates
+# through the app's normal UI/API surface (T-02-22).
+allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_wait_for, mcp__playwright__browser_close
 hooks:
   PreToolUse:
     - matcher: "Bash"
       hooks:
         - type: command
           command: "node ${CLAUDE_SKILL_DIR}/scripts/confirm-destructive.mjs"
+    - matcher: "mcp__playwright__browser_click"
+      hooks:
+        - type: command
+          command: "node ${CLAUDE_SKILL_DIR}/scripts/confirm-destructive-ui.mjs"
+    - matcher: "mcp__playwright__browser_fill_form"
+      hooks:
+        - type: command
+          command: "node ${CLAUDE_SKILL_DIR}/scripts/confirm-destructive-ui.mjs"
 ---
 
 # qa-agent
@@ -26,13 +39,28 @@ Copy or symlink this directory to `~/.claude/skills/qa-agent/`, then run
 the project under test besides the `qa-reports/` run artifacts this skill
 produces at run time — there is no project-specific setup step (PKG-01).
 
+A browser run additionally needs the Playwright MCP server registered once
+— see `references/mcp-setup.md` for the verified one-time setup procedure
+(the exact flags and the two registration paths, user-scope or
+project-scope). An API-only run needs none of this.
+
 ## Configuration
 
-- `QA_AGENT_TOKEN` (required) — the test user's bearer token, exported in the
-  shell that launched Claude Code, or set in the target project's
-  `.env.local`. Sent as `Authorization: Bearer <token>` on every request.
+- `QA_AGENT_TOKEN` (required for API-only runs) — the test user's bearer
+  token, exported in the shell that launched Claude Code, or set in the
+  target project's `.env.local`. Sent as `Authorization: Bearer <token>` on
+  every request.
 - `QA_AGENT_BASE_URL` (optional) — a default base URL, overridden by the
   first argument to `/qa-agent` when one is supplied.
+- `QA_AGENT_UI_USER` / `QA_AGENT_UI_PASSWORD` (required together, only when a
+  run needs a browser login) — the dedicated test user's login credentials
+  for `ui-login.mjs`, loaded from the shell environment or the target
+  project's `.env.local` exactly like `QA_AGENT_TOKEN`. These belong to a
+  low-privilege, dedicated test account — **never** a real user's own login.
+  Never required for an API-only run. If a UI login is requested and either
+  variable is unset, empty, or whitespace-only, the run stops with a
+  configuration error naming both variable names — it never attempts a login
+  with an empty credential.
 
 When `QA_AGENT_TOKEN` is missing, the run stops immediately with a
 configuration error message. It never proceeds with a missing or empty
@@ -42,16 +70,55 @@ failures (D-09).
 `api-client.mjs`'s exit codes — a configuration error (2), a refused
 confirmation (3), an unreachable target (4), or a refused production-looking
 host (6) **stops the run**; it is never rendered into the report as if it
-were a test failure (D-09):
+were a test failure (D-09). `ui-login.mjs` reuses the same codes for the
+meanings they share (2 configuration, 4 unreachable target), so a developer
+reads one table, not two:
 
 | Exit code | Meaning |
 |-----------|---------|
 | 0 | Case recorded — passed, failed, or blocked (`--declined`) are all a successful run of the script |
-| 2 | Configuration error — `QA_AGENT_BASE_URL is not configured` or `QA_AGENT_TOKEN is not configured` |
+| 2 | Configuration error — `QA_AGENT_BASE_URL is not configured`, `QA_AGENT_TOKEN is not configured`, or (`ui-login.mjs`) `QA_AGENT_UI_USER`/`QA_AGENT_UI_PASSWORD` not configured |
 | 3 | Confirmation required — a destructive call was dispatched without `--confirmed`, nothing was sent |
-| 4 | Target unreachable — either the preflight probe or the dispatch itself hit a transport-level failure |
+| 4 | Target unreachable — either the preflight probe, the dispatch itself, or (`ui-login.mjs`) reaching the login page hit a transport-level failure |
 | 5 | Evidence missing — `format-report.mjs` refused to render a passed/failed case with no response evidence |
 | 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
+| 7 | Login failed (`ui-login.mjs` only) — the login form was found but the supplied `QA_AGENT_UI_USER` was rejected, or no post-login state change occurred; no storage-state file is written |
+
+## UI authentication and session reuse
+
+When a run needs to act as a logged-in test user in the browser, and reuse
+that same session for related API calls, follow this two-step sequence
+(EXEC-03, API-03, D-07, D-08):
+
+1. Run the login script through the Bash tool — never drive the login form
+   interactively:
+   ```
+   node <skill-dir>/scripts/ui-login.mjs --base-url <base-url> \
+     --storage-state <target-project>/qa-reports/<run-id>-storage-state.json
+   ```
+   Capture the `storageStatePath` from its single JSON output line
+   (`{"status":"logged_in","storageStatePath":...,"postLoginUrl":...,"cookieNames":[...]}`).
+2. For every API case in the same run that should act as that logged-in
+   user, append `--storage-state <that path>` to the `api-client.mjs`
+   invocation. No second login, and no `QA_AGENT_TOKEN` is required for
+   those cases (API-03, D-07).
+
+**Credential isolation is a rule the orchestrator must follow, not
+background detail.** `QA_AGENT_UI_PASSWORD` is read from the environment
+strictly inside `ui-login.mjs`'s own process — it is never passed as an
+argument to any tool call, never echoed into chat, and never typed into a
+browser through an interactive tool. This is exactly why login is
+script-driven instead of orchestrator-issued Playwright MCP tool calls
+(D-08): an MCP tool call would require the orchestrator's own reasoning to
+construct the password as a literal string argument, putting it in the
+conversation transcript. If a login step fails, report the exit code and the
+script's own message — never retry by asking the developer to paste the
+password into the conversation.
+
+**A storage-state file is a live session credential**, equivalent to a
+cookie jar — treat it exactly that way. Reference it only by path, never
+print its contents into chat, `results.json`, or the Markdown report, and
+leave it inside the already-gitignored `qa-reports/` run directory.
 
 ## Run protocol
 
@@ -86,6 +153,91 @@ were a test failure (D-09):
 Response-shape checks in this phase are labelled **"shape observed"**, not
 "contract validated" — no API specification exists yet, so any inferred shape
 check is a hint, not ground truth (D-10).
+
+## UI run protocol
+
+This is the loop the orchestrator runs for a browser instruction (EXEC-01,
+EXEC-02, D-01–D-03, D-07). It is written to be concrete enough that two
+different sessions produce the same sequence:
+
+1. **Decide whether the instruction is a browser instruction.** A flow
+   described in terms of screens, forms or user actions — the alta de
+   cliente example, filling a form, walking a checkout — is a browser
+   instruction. An instruction naming HTTP methods and endpoint paths stays
+   on the API path in `## Run protocol` above. When both appear in one
+   instruction, run the browser flow first and then the API checks, so the
+   API checks inherit the session.
+2. **Resolve the base URL and pick one run id**, exactly as `## Run
+   protocol` steps 1 and 3 already specify. Browser cases and API cases from
+   the same instruction share one run id, one results file and one report.
+3. **Authenticate once**, per `## UI authentication and session reuse`: run
+   `scripts/ui-login.mjs` and keep the storage-state path it prints. Hand
+   that same path to the browser session as the startup session file
+   described in `references/mcp-setup.md`, and to every `api-client.mjs`
+   invocation later in the run as `--storage-state`. One login serves the
+   whole run.
+4. **Derive one case per user-visible outcome the developer asked about**,
+   not one per click — the same judgment `## Case construction` describes
+   for endpoints, applied to flows. The alta de cliente example is one case
+   whose steps are navigating to the form, filling it and submitting it.
+   Never invent a flow the developer did not ask for.
+5. **For each case, run this step loop:**
+   - `browser_navigate` to the starting URL.
+   - `browser_snapshot` to read the page.
+   - Map the instruction onto elements by their role and accessible name
+     from that snapshot, never by a CSS selector and never by guessing a ref
+     that is not in the snapshot in hand.
+   - Classify the target element against
+     `references/ui-destructive-classification.md` and apply `## UI
+     confirmation protocol` when it is gated.
+   - Issue exactly one interaction tool call (`browser_click`,
+     `browser_fill_form`, or `browser_type`).
+   - `browser_snapshot` again before doing anything else, because refs from
+     the previous snapshot are invalidated by any navigation or
+     DOM-mutating action, and reusing one produces a confusing
+     element-not-found failure that looks like an application bug but is
+     not.
+6. **Record every step's outcome.** Write the fresh snapshot's text to
+   `<target-project>/qa-reports/<run-id>-<case-id>-<step>.snapshot.txt` with
+   the `Write` tool, then invoke:
+   ```
+   node <skill-dir>/scripts/ui-case.mjs \
+     --results <target-project>/qa-reports/<run-id>.results.json \
+     --title "<case title>" --status <passed|failed|blocked> \
+     --action <navigate|click|fill|submit|assert> \
+     --element "<accessible name>" --url <page-url> \
+     --snapshot-file <that snapshot file path>
+   ```
+   Never write a pass or fail into the report by asserting it in chat — the
+   recorder is the only thing that produces a UI verdict, exactly as
+   `api-client.mjs` is the only thing that produces an API one. Capture
+   `browser_take_screenshot` and pass its path via `--screenshot` as well
+   for a failed case, where a picture is worth having next to the tree.
+7. **Retry a failed step exactly once** — re-snapshot and repeat that single
+   step — before recording the case as failed. Then say so honestly in the
+   verdict: a UI failure seen on one run is labelled **unconfirmed**, not
+   reproducible, because a single browser run cannot distinguish an
+   application defect from a timing artefact. Do not add a second or third
+   retry, and never loop a step until it passes — that converts a real
+   failure into a silent pass.
+8. **Prefer `browser_wait_for`** with a text or state condition over any
+   fixed sleep when a step needs the page to settle.
+9. **After the flow, run any API cases** the instruction called for through
+   `api-client.mjs` with `--storage-state` set to the run's session file,
+   following `## Case construction` and `## Confirmation protocol`
+   unchanged. No second login.
+10. **Render the report** with `scripts/format-report.mjs`, exactly as `##
+    Run protocol` step 5 already specifies, and post the same two-way
+    summary. Browser cases need no separate report and no separate command.
+11. **Close the browser** at the end of the run (`browser_close`).
+
+Never, in a browser run:
+- Reuse a ref across an action.
+- Fall back to a CSS selector when the accessible name is hard to match — a
+  per-project selector is exactly the setup this skill exists to avoid.
+- Use a JavaScript-evaluation tool to unblock a stuck flow.
+- Approve a batch of destructive clicks in one question.
+- Record a UI verdict without a captured snapshot.
 
 ## Case construction
 
@@ -138,3 +290,48 @@ every case (D-03, D-04):
 6. On no, invoke with `--declined` and a `--blocked-reason`, then continue
    with the next case in the same session (D-04). A decline never ends the
    run and never permanently bars that action from a later run (D-02).
+
+## UI confirmation protocol
+
+The same confirmation-gate philosophy extends to the browser (D-05, D-06):
+before clicking, typing into, or filling any element from a Playwright MCP
+`browser_snapshot`, the agent pauses on a destructive-looking one and asks,
+exactly as the API gate above pauses on a mutating method. Two independent
+layers back this up: the orchestrator's own classification below is the
+primary block, and the `PreToolUse` hook registered in frontmatter for
+`mcp__playwright__browser_click`/`browser_fill_form` is the hardening layer,
+mirroring Phase 1's Bash-command hook exactly (SC1, D-05). **The hook layer's
+live-session firing is unverified as of Phase 1's UAT (Test 4)** — a
+skill-frontmatter `PreToolUse` hook was not observed firing in that session,
+root cause undiagnosed. Do not read the hook's mere presence in frontmatter
+as proof of enforcement; the orchestrator-level pause below is the guarantee
+this protocol actually rests on.
+
+Run this loop for every interaction against an element from a snapshot:
+
+1. After every `browser_snapshot`, before issuing any click, type or
+   form-fill against an element from that snapshot, read the element's role,
+   accessible name and aria-label out of the snapshot and classify it using
+   `references/ui-destructive-classification.md`.
+2. If the element is not destructive, issue the single interaction tool call
+   and continue.
+3. If it is destructive, or if it has no readable accessible name, stop. Show
+   the developer the element's visible text, its aria-label, its snapshot ref
+   and the current page URL, and ask via `AskUserQuestion` for a yes or no on
+   that one interaction. Ask about one element at a time. Never batch several
+   destructive clicks into one question, and never request approval covering
+   the remainder of the run — there is no bulk-approval mode in this skill,
+   in the browser any more than in the API.
+4. On yes, issue that one interaction tool call, then re-snapshot before
+   doing anything else.
+5. On no, do not issue the tool call. Record the step as blocked with the
+   reason and continue with the next case in the same session — a decline
+   never ends the run and never permanently bars that action from a later
+   run. The concrete recorder invocation for a blocked UI case is documented
+   in the `## UI run protocol` section.
+6. Never show a value being typed in a confirmation prompt. Show the field's
+   label only.
+7. Never route around a gate by using a JavaScript-evaluation tool to trigger
+   an element directly. If a gated element cannot be interacted with through
+   the normal UI surface, report that and stop, rather than reaching for a
+   different mechanism.
