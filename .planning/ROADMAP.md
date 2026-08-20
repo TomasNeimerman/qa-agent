@@ -76,7 +76,13 @@ Plans:
   2. From what it discovers in code, the agent produces documented test cases (title, preconditions, steps, expected result, type: positive/negative/edge) that the API and browser executors can run directly (DISC-02).
   3. User can instead give a one-off natural-language instruction and get documented test cases generated for just that flow, without the agent scanning the whole codebase (DISC-03).
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+
+- [ ] 03-01-PLAN.md — Tracer: fixture project → deterministic Supabase constraint extraction → one conforming test-cases.md, plus the document format contract (DISC-01, DISC-02)
+- [ ] 03-02-PLAN.md — Route/form/Server-Action discovery rules and automatic App Router vs Pages Router detection (DISC-01, D-07, D-08)
+- [ ] 03-03-PLAN.md — Scoped natural-language generation, anchored case lookup, and the run-by-case-ID handoff to the Phase 1/2 executors (DISC-02, DISC-03)
 
 ### Phase 4: Edge-Case & Input Validation Quality
 
@@ -114,7 +120,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|-----------------|--------|-----------|
 | 1. Foundation, Guardrails & API Testing | 4/4 | Complete    | 2026-08-11 |
 | 2. Browser Execution Engine | 4/4 | Complete    | 2026-08-20 |
-| 3. Dual Discovery & Test-Case Generation | 0/TBD | Not started | - |
+| 3. Dual Discovery & Test-Case Generation | 0/3 | Planned     | - |
 | 4. Edge-Case & Input Validation Quality | 0/TBD | Not started | - |
 | 5. Smoke-Test Mode & Cross-Project Distribution | 0/TBD | Not started | - |
 
