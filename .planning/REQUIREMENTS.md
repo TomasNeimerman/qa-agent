@@ -15,16 +15,16 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Execution Engine (UI)
 
-- [ ] **EXEC-01**: El agente puede navegar autónomamente una app web (single Chromium context vía Playwright) y ejecutar acciones (click, fill, submit) sobre flujos y formularios
-- [ ] **EXEC-02**: El agente puede recibir instrucciones en lenguaje natural ("probá el alta de cliente") y traducirlas en pasos de navegación concretos
-- [ ] **EXEC-03**: El agente puede autenticarse en la app objetivo usando credenciales de test provistas por variable de entorno (nunca hardcodeadas en el skill)
+- [x] **EXEC-01**: El agente puede navegar autónomamente una app web (single Chromium context vía Playwright) y ejecutar acciones (click, fill, submit) sobre flujos y formularios
+- [x] **EXEC-02**: El agente puede recibir instrucciones en lenguaje natural ("probá el alta de cliente") y traducirlas en pasos de navegación concretos
+- [x] **EXEC-03**: El agente puede autenticarse en la app objetivo usando credenciales de test provistas por variable de entorno (nunca hardcodeadas en el skill)
 - [x] **EXEC-04**: El agente puede apuntar tanto a localhost como a una URL de staging, recibiendo la URL base como parámetro
 
 ### API Testing
 
 - [x] **API-01**: El agente puede ejecutar requests HTTP directos (GET/POST/PUT/DELETE) contra endpoints de la app objetivo, sin necesitar el navegador
 - [x] **API-02**: El agente valida códigos de estado, forma de la respuesta (contrato/schema) y manejo de errores esperado
-- [ ] **API-03**: El agente puede reusar la sesión/autenticación obtenida en la ejecución UI para llamadas API relacionadas
+- [x] **API-03**: El agente puede reusar la sesión/autenticación obtenida en la ejecución UI para llamadas API relacionadas
 
 ### Discovery & Test Generation
 
@@ -83,13 +83,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SAFE-01 | Phase 1 | Complete |
 | SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 1 | Complete |
-| EXEC-01 | Phase 2 | Pending |
-| EXEC-02 | Phase 2 | Pending |
-| EXEC-03 | Phase 2 | Pending |
+| EXEC-01 | Phase 2 | Complete |
+| EXEC-02 | Phase 2 | Complete |
+| EXEC-03 | Phase 2 | Complete |
 | EXEC-04 | Phase 1 | Complete |
 | API-01 | Phase 1 | Complete |
 | API-02 | Phase 1 | Complete |
-| API-03 | Phase 2 | Pending |
+| API-03 | Phase 2 | Complete |
 | DISC-01 | Phase 3 | Pending |
 | DISC-02 | Phase 3 | Pending |
 | DISC-03 | Phase 3 | Pending |

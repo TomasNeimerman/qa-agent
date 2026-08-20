@@ -14,7 +14,7 @@ QA Agent ships as a Claude Code skill that eliminates manual regression/form tes
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation, Guardrails & API Testing** - Installable skill with safety guardrails and a complete direct-HTTP API test loop (explore → test → report) (completed 2026-08-11)
-- [ ] **Phase 2: Browser Execution Engine** - Natural-language-directed browser automation with test-account auth and UI↔API session reuse
+- [x] **Phase 2: Browser Execution Engine** - Natural-language-directed browser automation with test-account auth and UI↔API session reuse (completed 2026-08-20)
 - [ ] **Phase 3: Dual Discovery & Test-Case Generation** - Code-aware and natural-language discovery that produces documented, executable test cases
 - [ ] **Phase 4: Edge-Case & Input Validation Quality** - Systematic boundary, negative, and permission edge-case coverage grounded in discovered constraints
 - [ ] **Phase 5: Smoke-Test Mode & Cross-Project Distribution** - Fast post-deploy smoke checks and unmodified portability across the team's projects
@@ -113,7 +113,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|-----------------|--------|-----------|
 | 1. Foundation, Guardrails & API Testing | 4/4 | Complete    | 2026-08-11 |
-| 2. Browser Execution Engine | 4/4 | In Progress|  |
+| 2. Browser Execution Engine | 4/4 | Complete    | 2026-08-20 |
 | 3. Dual Discovery & Test-Case Generation | 0/TBD | Not started | - |
 | 4. Edge-Case & Input Validation Quality | 0/TBD | Not started | - |
 | 5. Smoke-Test Mode & Cross-Project Distribution | 0/TBD | Not started | - |
