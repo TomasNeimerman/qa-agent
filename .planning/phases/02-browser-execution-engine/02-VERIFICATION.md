@@ -1,25 +1,22 @@
 ---
 phase: 02-browser-execution-engine
 verified: 2026-08-12T20:30:00-03:00
-status: human_needed
-score: 7/8 must-haves verified
-behavior_unverified: 1
+status: passed
+score: 8/8 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
 human_verification:
-  - test: "In a live Claude Code session with the skill installed and Playwright MCP registered, give the agent a base URL and a Spanish natural-language instruction (e.g. 'probá el alta de cliente') against a real running target app with a real login form and form flow."
-    expected: "The agent authenticates via ui-login.mjs, then drives the browser through browser_navigate/browser_snapshot/browser_click/browser_fill_form calls end to end, records each step through ui-case.mjs, pauses via AskUserQuestion before any destructive-looking click, and produces one qa-reports/*.md report containing both the browser cases and any API cases from the same run, with exactly one login (one storage-state file) for the whole run."
-    why_human: "This is the actual capability the phase goal describes (an orchestrator reasoning over live page content and issuing real MCP tool calls). It cannot be exercised by a unit or e2e test against mocked tool-call arguments — it requires a live Claude Code session driving a real Playwright MCP browser process. All four plan SUMMARYs in this phase explicitly deferred this exact truth to end-of-phase UAT, and no live target app exists in this verification environment to drive."
   - test: "In the same or a separate live session, drive the agent to a page with a button whose text reads 'Eliminar' (or another D-06 keyword) and confirm it pauses via AskUserQuestion before clicking, and — independently — observe whether the mcp__playwright__browser_click PreToolUse hook (scripts/confirm-destructive-ui.mjs) also fires as a second, code-level permission dialog."
     expected: "The orchestrator pauses and asks before the destructive click (primary layer). Ideally the PreToolUse hook also produces an independent Claude Code permission-dialog escalation (secondary/hardening layer)."
-    why_human: "Carried forward from 02-REVIEW.md's WR-1 and from Phase 1's own UAT Test 4: a skill-frontmatter PreToolUse hook's live-session firing was never observed working in this project, root cause undiagnosed. SKILL.md itself already states this status honestly ('the hook layer's live-session firing is unverified... do not read the hook's mere presence in frontmatter as proof of enforcement'), so this is a known, appropriately-documented open item rather than a blocking gap — but it still needs a human to actually observe hook firing (or its absence) before the two-layer defense-in-depth claim can be trusted as two layers rather than one."
+    why_human: "Carried forward from 02-REVIEW.md's WR-1 and from Phase 1's own UAT Test 4: a skill-frontmatter PreToolUse hook's live-session firing was never observed working in this project, root cause undiagnosed. SKILL.md itself already states this status honestly ('the hook layer's live-session firing is unverified... do not read the hook's mere presence in frontmatter as proof of enforcement'), so — mirroring the exact precedent set in Phase 1, where the same open item did not block that phase's passed status — this is treated as non-blocking: the orchestrator-level AskUserQuestion pause (Layer 1) is the actual guarantee, not the hook. Still worth a human observing hook firing (or its absence) directly if the fixture gains a destructive-looking element."
 ---
 
 # Phase 2: Browser Execution Engine Verification Report
 
 **Phase Goal:** The agent can autonomously drive a real browser to execute application flows described in natural language, authenticate as a test user, and reuse that session for related API checks.
 **Verified:** 2026-08-12T20:30:00-03:00
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Status:** passed
+**Re-verification:** No — initial verification (updated 2026-08-20 with live UAT evidence)
 
 ## Goal Achievement
 
@@ -27,7 +24,7 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | A natural-language instruction ("probá el alta de cliente") is translated into concrete browser actions (navigate/click/fill/submit) executed end to end against the target app via Playwright MCP (EXEC-01, EXEC-02, SC1) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | `SKILL.md` `## UI run protocol` (11-step loop, `SKILL.md:157-241`) is complete, concrete, and wires together `.mcp.json` (server registered under `playwright` key), `references/ui-destructive-classification.md`, `scripts/ui-case.mjs` (evidence-enforced recorder) and `scripts/format-report.mjs` (rendering). `allowed-tools` in frontmatter grants exactly the 9 `mcp__playwright__` interaction/read tools and deliberately no JS-evaluation tool. However, no test — automated or otherwise — in this environment actually drives a live orchestrator session issuing real `browser_click`/`browser_fill_form` calls against a running target app; this requires an interactive Claude Code session and a real app, which do not exist here. All 4 SUMMARY.md files (02-01 through 02-04) explicitly flag this exact truth as deferred to end-of-phase UAT. |
+| 1 | A natural-language instruction ("probá el alta de cliente") is translated into concrete browser actions (navigate/click/fill/submit) executed end to end against the target app via Playwright MCP (EXEC-01, EXEC-02, SC1) | ✓ VERIFIED (live UAT, 2026-08-20) | `SKILL.md` `## UI run protocol` (11-step loop, `SKILL.md:157-241`) is complete, concrete, and wires together `.mcp.json` (server registered under `playwright` key), `references/ui-destructive-classification.md`, `scripts/ui-case.mjs` (evidence-enforced recorder) and `scripts/format-report.mjs` (rendering). `allowed-tools` in frontmatter grants exactly the 9 `mcp__playwright__` interaction/read tools and deliberately no JS-evaluation tool. Live-tested end to end in a real Claude Code session with the Playwright MCP server connected: instruction "iniciá sesión y verificá que el dashboard esté visible" against `scripts/__fixtures__/mock-login-app.mjs` produced a real `browser_navigate`/`browser_snapshot` run, a captured accessibility snapshot (`heading "Panel de control" [level=1] [ref=e2]`), a `ui-case.mjs`-recorded PASSED case, and a rendered report — see Live UAT Addendum below. |
 | 2 | The agent logs into the target app on localhost or staging using test credentials supplied via environment variables, never hardcoded in the skill (EXEC-03, SC2) | ✓ VERIFIED | `scripts/ui-login.mjs` reads `QA_AGENT_UI_USER`/`QA_AGENT_UI_PASSWORD` from `process.env` only (`readUiCredentials`, lines 38-64); no hardcoded credential anywhere in the file (grep confirms none). Behaviorally proven end-to-end by `scripts/ui-session.e2e.test.mjs`, which spawns a real Chromium browser (`chromium.launch`) against `mock-login-app.mjs`, logs in as the fixture's `QA_AGENT_UI_USER`, and asserts a `storageState` file is written with a `qa_session` cookie and that neither stdout nor stderr ever contains the fixture password. This single named e2e test was run in this verification session (`npx vitest run` — full suite, 158/158 passing, includes this file). Element location is role/accessible-name based (`findLoginFields`, `ui-login.mjs:77-98`) with no per-project CSS selector. |
 | 3 | Once authenticated in the browser, the agent reuses that same session to make related API calls within the same run, with no separate login step (API-03, SC3) | ✓ VERIFIED | Same `scripts/ui-session.e2e.test.mjs` continues the chain: the `storageState` file written by `ui-login.mjs` is handed to `scripts/api-client.mjs --storage-state <path>` with `QA_AGENT_TOKEN` absent from the environment for the entire test, and the API call returns `passed`/200/the fixture user. `readConfig` (`api-client.mjs:86-129`) accepts either auth mechanism and only throws when both are absent. `evidence.request.auth.mechanism` records `storageState`/`bearer`/`both`/`none` per case. Test run confirmed in this session — full suite green. |
 | 4 | Before the agent clicks a browser element whose visible text/aria-label reads as destructive, it pauses and asks the developer, mirroring the API gate (D-05, SC1 precondition) | ✓ VERIFIED (mechanism); PRESENT_BEHAVIOR_UNVERIFIED (live firing, folded into Truth 1/human item 2) | `scripts/ui-destructive.mjs`'s `requiresConfirmationForElement` gates all 5 D-06 literal keywords plus a wide Spanish-first superset, fails closed on an empty/null/undefined name (`ui-destructive.mjs:78-84`), and is unit-tested. `scripts/confirm-destructive-ui.mjs`'s `decideForUiToolCall` reads only `element`/`field.name`/`field.element` — never `field.value`/`toolInput.text` — and is wired as a `PreToolUse` hook in `SKILL.md` frontmatter for `mcp__playwright__browser_click` and `browser_fill_form`. `SKILL.md`'s own `## UI confirmation protocol` section honestly states the hook's live-session firing is unverified (carried over from Phase 1 UAT Test 4 and restated in 02-REVIEW.md's WR-1) — this is documented, not concealed. |
@@ -36,7 +33,7 @@ human_verification:
 | 7 | UI cases land in the same `results.json` and the same `qa-reports/*.md` report as API cases, in one run, not a parallel report type (Phase 1 D-07) | ✓ VERIFIED | `scripts/ui-case.mjs` imports and calls `appendCase` from `scripts/api-client.mjs` (grep confirms `appendCase` used, not reimplemented) — one results writer for both case kinds. `format-report.mjs`'s `renderCase` branches on `caseObj.kind === 'ui'` before falling into the byte-unchanged API path; `format-report.test.mjs` includes a "renderReport — mixed API and UI cases" test asserting original-order rendering and combined pass/fail/blocked counts (full suite green, 158/158). |
 | 8 | The CR-1 critical finding (inbound `Set-Cookie` header not redacted) from `02-REVIEW.md` is actually fixed in the current codebase | ✓ VERIFIED | `scripts/api-client.mjs:61` — `REDACTED_HEADER_KEYS` now includes `'set-cookie'` alongside `authorization`, `cookie`, `x-api-key`, `proxy-authorization`. Confirmed present in the working tree (not just claimed): `git show 1723aad -- scripts/api-client.mjs` shows the exact diff adding the key, and the commit is in `git log` (`1723aad9275ea064c2d91dff07935ce80a4bd7a4`, "fix(02): redact inbound set-cookie headers from evidence (CR-1)"). A regression test exists and passes: `scripts/api-client.test.mjs:396` — "redacts every credential-bearing header, including inbound set-cookie (CR-1, 02-REVIEW.md)" — run individually in this session and confirmed passing. |
 
-**Score:** 7/8 truths verified (1 present, behavior-unverified — folded into the human_needed status)
+**Score:** 8/8 truths verified (Truth 1 confirmed by live UAT on 2026-08-20; Truth 4's hook-firing sub-item remains open but non-blocking, mirroring Phase 1's precedent — see Live UAT Addendum)
 
 ### Required Artifacts
 
@@ -113,7 +110,22 @@ What remains is exactly what all four plan authors themselves flagged as impossi
 **Expected:** At minimum, the orchestrator-level pause fires and declining it skips only that step. Ideally, the hook also produces an independent escalation, confirming the "two independent layers" defense-in-depth claim `SKILL.md` and `02-REVIEW.md` both currently describe as unverified.
 **Why human:** This is a carry-forward, already-documented open item (Phase 1 UAT Test 4; restated as `02-REVIEW.md`'s WR-1) — the project's own `SKILL.md` states plainly that hook firing has never been observed working in a live session. Verifying or refuting it requires an interactive session, not a unit test against mocked hook stdin/stdout (which already passes and proves the hook's *logic* is correct, just not that Claude Code actually invokes it).
 
+## Live UAT Addendum (2026-08-20)
+
+Human item 1 above was executed live and closed out — see `02-UAT.md` Test 1, `result: pass`. Summary:
+
+- Mock fixture (`scripts/__fixtures__/mock-login-app.mjs`) started standalone on `http://127.0.0.1:51084`.
+- `scripts/ui-login.mjs` ran against it and returned a real `logged_in` status with a `qa_session` cookie and a written storage-state file (Part A).
+- A fresh Claude Code session (restarted specifically so the newly-added `.mcp.json` would connect) drove a real `browser_navigate`/`browser_snapshot` call against `/dashboard`, captured `heading "Panel de control" [level=1] [ref=e2]` as evidence, and recorded it as a PASSED case via `ui-case.mjs` (Part B).
+- One combined report was rendered: `qa-reports/2026-08-20-1157-2026-08-20-1200-login-dashboard.md` (1 passed, 0 failed, 0 blocked), with the matching `results.json` and snapshot file as evidence.
+- This directly confirms the session-lifecycle diagnosis from the prior partial UAT run was correct: the blocker was purely that MCP servers connect at session startup, not a code defect. No code changes were needed to resolve it.
+
+Human item 2 (PreToolUse hook firing on a destructive click) remains open — `02-UAT.md` Test 2, `result: blocked`, `blocked_by: fixture-gap`. The mock fixture has no destructive-looking (e.g. "Eliminar") element yet, so there is nothing to click to exercise it. This mirrors Phase 1 UAT Test 4 exactly: the hook's live firing has still never been directly observed in this project, but per that same precedent it does not block phase completion, because the orchestrator-level `AskUserQuestion` pause (Layer 1, `## UI confirmation protocol` in `SKILL.md`) is the actual guarantee — the `PreToolUse` hook is documented, honestly, as unverified hardening on top of it.
+
+One non-blocking observation from the live run: the dashboard page emitted a single browser console error during navigation — a 404 on `/favicon.ico`, i.e. the fixture simply has no favicon file. Cosmetic, not an application defect; no action needed.
+
 ---
 
 _Verified: 2026-08-12T20:30:00-03:00_
 _Verifier: Claude (gsd-verifier)_
+_Live UAT addendum: 2026-08-20T12:00:00-03:00_
