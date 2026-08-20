@@ -79,9 +79,16 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 03-01-PLAN.md — Tracer: fixture project → deterministic Supabase constraint extraction → one conforming test-cases.md, plus the document format contract (DISC-01, DISC-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 03-02-PLAN.md — Route/form/Server-Action discovery rules and automatic App Router vs Pages Router detection (DISC-01, D-07, D-08)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 03-03-PLAN.md — Scoped natural-language generation, anchored case lookup, and the run-by-case-ID handoff to the Phase 1/2 executors (DISC-02, DISC-03)
 
 ### Phase 4: Edge-Case & Input Validation Quality
