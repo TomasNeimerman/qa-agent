@@ -28,7 +28,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Discovery & Test Generation
 
-- [ ] **DISC-01**: El agente puede explorar el código del proyecto objetivo (rutas, formularios, schemas de validación, constraints de base de datos) para inferir qué probar
+- [x] **DISC-01**: El agente puede explorar el código del proyecto objetivo (rutas, formularios, schemas de validación, constraints de base de datos) para inferir qué probar
 - [ ] **DISC-02**: El agente puede generar casos de prueba documentados (título, precondiciones, pasos, resultado esperado, tipo: positivo/negativo/edge) a partir de lo descubierto en el código
 - [ ] **DISC-03**: El agente puede generar casos de prueba documentados a partir de una instrucción puntual en lenguaje natural, sin necesidad de explorar todo el código
 - [ ] **DISC-04**: El agente cubre sistemáticamente validación de formularios: campos requeridos, formatos inválidos, valores límite (boundary values)
@@ -90,7 +90,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-01 | Phase 1 | Complete |
 | API-02 | Phase 1 | Complete |
 | API-03 | Phase 2 | Complete |
-| DISC-01 | Phase 3 | Pending |
+| DISC-01 | Phase 3 | Complete |
 | DISC-02 | Phase 3 | Pending |
 | DISC-03 | Phase 3 | Pending |
 | DISC-04 | Phase 4 | Pending |
