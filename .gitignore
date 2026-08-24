@@ -6,3 +6,5 @@ qa-reports/
 .env.local
 .planning/research/.cache/
 .playwright-mcp/
+.claude/worktrees/
+.gsd/
