@@ -259,23 +259,40 @@ the test-cases document itself, per `## Case generation protocol` below.
 2. **Resolve the target project root to an absolute path and pick one run
    id**, in the same `YYYY-MM-DD-HHmm-<slug>` form `## Run protocol` step 3
    already uses.
-3. **Glob the target's App Router API handlers** (`app/**/route.ts`),
-   always excluding `node_modules`, `.next`, `dist`, `build`, `coverage`
-   and `.git` (D-07).
+3. **Glob the target's App Router API handlers** (`app/**/route.ts`) **and
+   its pages** (`app/**/page.tsx`), always excluding `node_modules`,
+   `.next`, `dist`, `build`, `out`, `coverage` and `.git` (D-07). Detection
+   detail for both globs — the exact patterns, the imperative-validation
+   shape, and the form-mechanism check below — is documented in
+   `references/discovery-nextjs.md`; read that file rather than
+   re-deriving the rule from scratch, the same way `## Confirmation
+   protocol` step 1 defers to `references/destructive-classification.md`.
 4. **Read each matched handler** and record, for every exported HTTP verb
    function, each early-return validation check with its file, line,
    literal message and status code. These apps validate imperatively, not
    with a schema library — finding no schema import is not evidence that a
    route is unvalidated; read the handler body itself before concluding
    that.
-5. **Invoke `node <skill-dir>/scripts/discover-schema.mjs --project-root
+5. **For each matched page, apply the form-mechanism check** from
+   `references/discovery-nextjs.md` before deciding anything about that
+   surface: look in the same directory for a colocated `actions.ts`
+   carrying the server directive first — if present the surface is
+   server-action-backed; if absent and the page calls `fetch()` against an
+   API path, the surface is client-fetch-backed and resolves to that
+   handler.
+6. **Invoke `node <skill-dir>/scripts/discover-schema.mjs --project-root
    <target>`** through the Bash tool and read its JSON. Never read
    migration SQL by eye to decide what a constraint says — a policy
    predicate (`WITH CHECK`) and a data constraint (`CHECK`) share the same
    substring, and this script is the only tier permitted to make that call
    (03-RESEARCH.md Pattern 3).
-6. **Hand everything recorded** — the route handlers' imperative checks and
-   `discover-schema.mjs`'s JSON — to `## Case generation protocol` below.
+7. **Name each discovered surface** using the convention `## Case
+   generation protocol` below groups by: an HTTP method and path for an
+   API surface (e.g. `POST /api/categorias`), and a route path plus
+   mechanism for a UI surface (e.g. `UI /login (Server Action)`).
+8. **Hand everything recorded** — the route handlers' imperative checks,
+   the classified form surfaces, and `discover-schema.mjs`'s JSON — to
+   `## Case generation protocol` below.
 
 ## Case generation protocol
 
