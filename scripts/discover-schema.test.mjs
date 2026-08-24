@@ -8,7 +8,7 @@
 // except for the CLI-level exit-code assertions.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -273,6 +273,78 @@ describe('discoverSchema — size cap (T-03-02, ASVS V12)', () => {
     expect(result.skipped[0].bytes).toBeGreaterThan(MAX_MIGRATION_BYTES);
     expect(result.constraints.some((c) => c.source.file === '0002_huge.sql')).toBe(false);
     expect(result.constraints.some((c) => c.source.file === '0001_ok.sql')).toBe(true);
+  });
+});
+
+describe('discoverSchema — symlinked migrations (WR-02)', () => {
+  let symlinksSupported = true;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'qa-discover-'));
+  });
+
+  it('a symlinked .sql file inside the migrations directory is read, not silently dropped', () => {
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    writeFileSync(join(migrationsDir, '0001_real.sql'), 'CREATE TABLE t (a int);');
+    const targetDir = join(tmpDir, 'shared-migrations');
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(join(targetDir, '0002_shared.sql'), 'CREATE TABLE shared (b text NOT NULL);');
+    try {
+      symlinkSync(join(targetDir, '0002_shared.sql'), join(migrationsDir, '0002_shared.sql'), 'file');
+    } catch {
+      symlinksSupported = false;
+      return;
+    }
+
+    const result = discoverSchema({ projectRoot: tmpDir });
+    expect(result.files).toEqual(['0001_real.sql', '0002_shared.sql']);
+    expect(result.skipped).toEqual([]);
+    expect(result.constraints.some((c) => c.source.file === '0002_shared.sql')).toBe(true);
+  });
+
+  it('a symlinked .sql file whose target resolves outside the project root is rejected with PathEscapeError, not silently dropped', () => {
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    const outsideDir = mkdtempSync(join(tmpdir(), 'qa-discover-outside-'));
+    writeFileSync(join(outsideDir, 'evil.sql'), 'CREATE TABLE evil (c int);');
+    try {
+      symlinkSync(join(outsideDir, 'evil.sql'), join(migrationsDir, '0001_evil.sql'), 'file');
+    } catch {
+      symlinksSupported = false;
+      rmSync(outsideDir, { recursive: true, force: true });
+      return;
+    }
+
+    try {
+      expect(() => discoverSchema({ projectRoot: tmpDir })).toThrow(PathEscapeError);
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it('a broken symlink is reported in skipped rather than crashing discovery', () => {
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    writeFileSync(join(migrationsDir, '0001_real.sql'), 'CREATE TABLE t (a int);');
+    try {
+      symlinkSync(join(migrationsDir, 'does-not-exist.sql'), join(migrationsDir, '0002_broken.sql'), 'file');
+    } catch {
+      symlinksSupported = false;
+      return;
+    }
+
+    const result = discoverSchema({ projectRoot: tmpDir });
+    expect(result.files).toEqual(['0001_real.sql']);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0].file).toBe('0002_broken.sql');
+  });
+
+  afterEach(() => {
+    if (!symlinksSupported) {
+      // eslint-disable-next-line no-console
+      console.warn('symlinkSync unsupported in this environment — WR-02 symlink assertions were skipped.');
+    }
   });
 });
 

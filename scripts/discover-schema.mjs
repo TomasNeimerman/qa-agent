@@ -84,13 +84,24 @@ export function resolveWithinRoot(projectRoot, candidate) {
 }
 
 /**
- * Reads `migrationsDir` and returns every regular file whose name ends with
- * `.sql`, sorted lexicographically. Supabase migration filenames are
- * zero-padded and numbered (`0001_init.sql`, `0002_...sql`), so a
- * lexicographic sort is also chronological order. Uses `readdirSync`, not
- * the still-Experimental `fs.globSync` (03-RESEARCH.md Environment
- * Availability). Throws `MigrationsDirError` naming the path when the
- * directory does not exist.
+ * Reads `migrationsDir` and returns every regular file (or symlink — see
+ * below) whose name ends with `.sql`, sorted lexicographically. Supabase
+ * migration filenames are zero-padded and numbered (`0001_init.sql`,
+ * `0002_...sql`), so a lexicographic sort is also chronological order. Uses
+ * `readdirSync`, not the still-Experimental `fs.globSync` (03-RESEARCH.md
+ * Environment Availability). Throws `MigrationsDirError` naming the path
+ * when the directory does not exist.
+ *
+ * A `Dirent` for a symlink reports `isFile() === false` regardless of what
+ * it points to, so filtering on `isFile()` alone silently dropped every
+ * symlinked `.sql` migration before the per-file loop's `resolveWithinRoot`
+ * containment check ever ran on it — making the module's own documented
+ * "a symlink target resolved outside the project root" guarantee (see file
+ * header) dead code for this vector (WR-02). Including `isSymbolicLink()`
+ * entries here restores that: the per-file loop already resolves each
+ * filename through `resolveWithinRoot` (which calls `realpathSync`,
+ * following the link and checking the *resolved* target's containment)
+ * before ever reading it.
  */
 export function listMigrations(migrationsDir) {
   let entries;
@@ -100,7 +111,7 @@ export function listMigrations(migrationsDir) {
     throw new MigrationsDirError(`Migrations directory not found: ${migrationsDir}`);
   }
   return entries
-    .filter((e) => e.isFile() && e.name.endsWith('.sql'))
+    .filter((e) => (e.isFile() || e.isSymbolicLink()) && e.name.endsWith('.sql'))
     .map((e) => e.name)
     .sort();
 }
@@ -531,7 +542,26 @@ export function discoverSchema({ projectRoot, migrationsDir = 'supabase/migratio
 
   for (const filename of fileNames) {
     const filePath = resolveWithinRoot(rootReal, join(migrationsAbs, filename));
-    const { size } = statSync(filePath);
+
+    // listMigrations now admits symlinks (WR-02), so — unlike a plain file,
+    // which is guaranteed to exist and be a regular file by the time
+    // readdirSync reported it — a symlinked ".sql" entry can point at a
+    // broken target or at a directory. resolveWithinRoot already ran
+    // realpathSync on filePath, so a broken link surfaces here as statSync
+    // throwing; report and skip rather than letting the whole discovery run
+    // crash on one bad link.
+    let stat;
+    try {
+      stat = statSync(filePath);
+    } catch {
+      skipped.push({ file: filename, reason: 'unreadable' });
+      continue;
+    }
+    if (!stat.isFile()) {
+      skipped.push({ file: filename, reason: 'not-a-file' });
+      continue;
+    }
+    const { size } = stat;
     if (size > MAX_MIGRATION_BYTES) {
       skipped.push({ file: filename, reason: 'size', bytes: size });
       continue;
