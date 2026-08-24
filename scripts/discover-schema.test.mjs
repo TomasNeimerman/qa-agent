@@ -98,6 +98,30 @@ describe('extractConstraints — column forms', () => {
   });
 });
 
+describe('extractConstraints — multi-line CREATE TABLE citation accuracy (03-03 Task 3 real-repo finding)', () => {
+  it('cites each column on its own real line, not the previous column\'s line', () => {
+    const sql = [
+      '-- comment',
+      'CREATE TABLE tenants (',
+      '  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),',
+      '  nombre      text NOT NULL,',
+      '  creado_en   timestamptz NOT NULL DEFAULT now()',
+      ');',
+      '',
+    ].join('\n');
+    const records = extractConstraints(sql, { file: 'x.sql' });
+    const byColumn = Object.fromEntries(records.map((r) => [r.column, r.source.line]));
+    // Line 1 is the comment, line 2 is CREATE TABLE, so id/nombre/creado_en
+    // sit on lines 3/4/5 respectively — each entry after the first was
+    // previously reported one line too early because its own leading
+    // newline (the separator after the prior column's comma) was never
+    // counted.
+    expect(byColumn.id).toBe(3);
+    expect(byColumn.nombre).toBe(4);
+    expect(byColumn.creado_en).toBe(5);
+  });
+});
+
 describe('extractConstraints — ALTER TABLE forms', () => {
   it('ALTER TABLE ... ADD COLUMN ... CHECK yields a record with origin alter_table', () => {
     const sql = 'ALTER TABLE t ADD COLUMN c int CHECK (c > 0);\n';

@@ -298,7 +298,15 @@ function parseCreateTableStatement(stmtText, baseLine, file) {
     const text = entry.text.trim();
     if (!text) continue;
 
-    const absoluteIndex = bodyStartIndex + entry.startOffsetInBody;
+    // entry.text still carries its own leading whitespace/newline (the
+    // separator that followed the previous entry's comma) — that leading
+    // newline must be counted too, or every entry after the first column
+    // in a multi-line CREATE TABLE cites one line too early (03-03
+    // Task 3, found against the real franquix/dotax migrations: a
+    // 3-column table reported column 2 on column 1's line and column 3
+    // on column 2's line). Skip past it before counting.
+    const leadingWs = entry.text.match(/^\s*/)[0].length;
+    const absoluteIndex = bodyStartIndex + entry.startOffsetInBody + leadingWs;
     const line = baseLine + countNewlines(stmtText.slice(0, absoluteIndex));
 
     // A table-level constraint line (`CONSTRAINT ... CHECK (...)`, a bare
