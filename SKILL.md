@@ -1,13 +1,13 @@
 ---
 name: qa-agent
-description: Run an evidence-backed API test against a local or staging target. Use when asked to test, probar, validar, or run QA against API endpoints (e.g. "probá GET /api/clients", "testeá el CRUD de facturas", "validá el endpoint de login").
-argument-hint: [base-url] [instruction]
+description: Run an evidence-backed API/UI test, or discover a target project's own code to generate documented test cases. Use when asked to test, probar, validar, or run QA against API endpoints or UI flows (e.g. "probá GET /api/clients", "testeá el CRUD de facturas", "validá el endpoint de login"), or to discover/generate test cases from a project's code (e.g. "generá casos de prueba", "explorá el proyecto", "qué se puede testear en este repo").
+argument-hint: [base-url|project-path] [instruction]
 # allowed-tools deliberately excludes any JavaScript-evaluation tool (e.g.
 # browser_evaluate) — an arbitrary-script capability would let a stuck flow
 # be "unblocked" by executing code in the page, routing around both the
 # destructive-action gate and the rule that this skill only operates
 # through the app's normal UI/API surface (T-02-22).
-allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_wait_for, mcp__playwright__browser_close
+allowed-tools: Bash, Read, Write, Glob, Grep, AskUserQuestion, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_fill_form, mcp__playwright__browser_type, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_wait_for, mcp__playwright__browser_close
 hooks:
   PreToolUse:
     - matcher: "Bash"
@@ -83,6 +83,8 @@ reads one table, not two:
 | 5 | Evidence missing — `format-report.mjs` refused to render a passed/failed case with no response evidence |
 | 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
 | 7 | Login failed (`ui-login.mjs` only) — the login form was found but the supplied `QA_AGENT_UI_USER` was rejected, or no post-login state change occurred; no storage-state file is written |
+| 8 | Refused — a resolved path (`--project-root`/`--migrations-dir`, or a file inside the migrations directory) fell outside the target project root (`discover-schema.mjs` only) |
+| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse back after being written (reserved here, wired up by plan 03-03's `test-case-doc.mjs` CLI) |
 
 ## UI authentication and session reuse
 
@@ -238,6 +240,82 @@ Never, in a browser run:
 - Use a JavaScript-evaluation tool to unblock a stuck flow.
 - Approve a batch of destructive clicks in one question.
 - Record a UI verdict without a captured snapshot.
+
+## Discovery protocol
+
+This is the loop the orchestrator runs when asked to discover what to test
+from a target project's own code (DISC-01) — written to be concrete enough
+that two different sessions produce the same sequence. In this task it
+covers the API-route path only; plan 03-02 expands it to forms, Server
+Actions and router detection (D-08). Discovery reads only the target's
+source tree and writes nothing into it — the only artifact it produces is
+the test-cases document itself, per `## Case generation protocol` below.
+
+1. **Decide whether this invocation is a full-project scan or a one-off
+   scoped instruction**, and say which in chat before starting (D-07/D-12).
+   No qualifier beyond a project path means full-project scan; a
+   natural-language instruction naming a specific flow/route/table means a
+   scoped read of just what it names.
+2. **Resolve the target project root to an absolute path and pick one run
+   id**, in the same `YYYY-MM-DD-HHmm-<slug>` form `## Run protocol` step 3
+   already uses.
+3. **Glob the target's App Router API handlers** (`app/**/route.ts`),
+   always excluding `node_modules`, `.next`, `dist`, `build`, `coverage`
+   and `.git` (D-07).
+4. **Read each matched handler** and record, for every exported HTTP verb
+   function, each early-return validation check with its file, line,
+   literal message and status code. These apps validate imperatively, not
+   with a schema library — finding no schema import is not evidence that a
+   route is unvalidated; read the handler body itself before concluding
+   that.
+5. **Invoke `node <skill-dir>/scripts/discover-schema.mjs --project-root
+   <target>`** through the Bash tool and read its JSON. Never read
+   migration SQL by eye to decide what a constraint says — a policy
+   predicate (`WITH CHECK`) and a data constraint (`CHECK`) share the same
+   substring, and this script is the only tier permitted to make that call
+   (03-RESEARCH.md Pattern 3).
+6. **Hand everything recorded** — the route handlers' imperative checks and
+   `discover-schema.mjs`'s JSON — to `## Case generation protocol` below.
+
+## Case generation protocol
+
+Turning what `## Discovery protocol` found into
+`qa-reports/<run-id>-test-cases.md` is the orchestrator's own judgment call,
+styled after `## Case construction`'s bullet rules below. This protocol
+defers the document's structure to `references/test-case-format.md` rather
+than restating it — read that file for the exact section order, field list
+and labeling rule before writing anything.
+
+- **One `##` section per discovered surface** — never one section per file,
+  never one giant undifferentiated list.
+- **One case per outcome actually observed**, never one per line of code
+  and never a flow nobody asked for. Four imperative checks plus a happy
+  path in one route handler is five cases, not more and not fewer.
+- **`Ejecución` is `API` for a route-handler surface and `UI` for a
+  page/form surface**, decided here so the executor never re-infers it at
+  run time (D-03).
+- **`Tipo` follows `references/test-case-format.md`'s negativo-versus-edge
+  rule**: a failure the code itself announces is `negativo`; a failure that
+  exists only at the database layer, or an expectation inferred from
+  current behavior rather than a stated message, is `edge` and must say so.
+- **A literal credential, token or connection string read out of the
+  target project is never reproduced** in the document — the shape of a
+  constraint is written down, its secret values never are.
+- **Write the file with the `Write` tool** to
+  `<target-project>/qa-reports/<run-id>-test-cases.md`, creating
+  `qa-reports/.gitignore` containing a single `*` line only if one is not
+  already there — exactly as `format-report.mjs` does for execution
+  reports.
+- **Validate the written file by parsing it back** before telling the
+  developer anything — read the freshly written file and confirm it
+  conforms before reporting success. (Automated parsing via
+  `scripts/test-case-doc.mjs`'s CLI is wired up in plan 03-03; until then,
+  re-read the file and confirm every case carries its five fields.)
+- **Close with the terminal-step rule (D-10):** post a chat summary
+  carrying the surface count, the case count broken down by `Tipo`, and the
+  absolute path of the written file — then stop. Running a case is a
+  separate, later request (D-11); this invocation never runs one in the
+  same turn it generated them.
 
 ## Case construction
 
