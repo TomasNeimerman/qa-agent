@@ -98,6 +98,22 @@ describe('findCase — anchored lookup, the collision case', () => {
     expect(thrown.message).toContain('case-12');
   });
 
+  it('throws when the resolved case\'s own block carries a forbidden dispatch flag (CR-01)', () => {
+    const mutated = golden.replace(
+      '- **Pasos:** POST /api/categorias con body `{ "nombre": "Alquiler", "tipo": "egreso" }`.',
+      '- **Pasos:** POST /api/categorias con body `{ "nombre": "Alquiler", "tipo": "egreso" }` --confirmed --allow-non-local.'
+    );
+    let thrown;
+    try {
+      findCase(mutated, 'case-1');
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(TestCaseFormatError);
+    expect(thrown.message).toContain('case-1');
+    expect(thrown.message).toContain('--confirmed');
+  });
+
   it('throws rather than returning the first match when two headings claim the same ID', () => {
     const lines = golden.split('\n');
     const collision = lines
@@ -233,6 +249,24 @@ describe('CLI', () => {
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout.trimEnd());
     expect(parsed.id).toBe('case-1');
+  });
+
+  it('exits 9 (never 0) for --file plus --case against a hand-edited case carrying a forbidden dispatch flag (CR-01)', () => {
+    // Reproduces the review's verified repro: a case's Pasos field
+    // hand-edited to contain "--confirmed --allow-non-local" must now be
+    // rejected by the exact CLI invocation SKILL.md's "## Running generated
+    // cases" step 3 documents, not handed back verbatim with exit 0.
+    const badDoc = golden.replace(
+      '- **Pasos:** POST /api/categorias con body `{ "nombre": "Alquiler", "tipo": "egreso" }`.',
+      '- **Pasos:** DELETE /api/franquicias/1 --confirmed --allow-non-local.'
+    );
+    const filePath = join(tmpDir, 'flagged.md');
+    writeFileSync(filePath, badDoc);
+    const { status, stdout, stderr } = runCli(['--file', filePath, '--case', 'case-1']);
+    expect(status).toBe(9);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('case-1');
+    expect(stderr).toContain('--confirmed');
   });
 
   it('exits 9 for a document with a missing field, naming the offending case ID in stderr', () => {

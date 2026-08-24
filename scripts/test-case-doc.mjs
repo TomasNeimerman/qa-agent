@@ -266,7 +266,12 @@ export function parseTestCasesDoc(markdown) {
  * not present (naming the requested ID and listing every ID the document
  * does contain) or when it is ambiguous — two headings claiming the same ID
  * — because an ambiguous document must never resolve silently to the first
- * match.
+ * match. Also throws `TestCaseFormatError` if the resolved case's own block
+ * contains a literal from `FORBIDDEN_DISPATCH_FLAGS` (CR-01) — this is what
+ * keeps a dispatch-time lookup (the CLI's `--case` branch, or any other
+ * caller) from ever handing back a `Pasos` value that already carries a
+ * pre-approval like `--confirmed`, independent of whether the caller also
+ * ran `validateTestCasesDoc` over the whole document first.
  */
 export function findCase(markdown, caseId) {
   const id = /^\d+$/.test(String(caseId)) ? `case-${caseId}` : String(caseId);
@@ -305,6 +310,23 @@ export function findCase(markdown, caseId) {
 
   const { index, title, surface } = matches[0];
   const parsed = parseCaseBlock(lines, index, id, title);
+
+  // Mirrors the FORBIDDEN_DISPATCH_FLAGS scan validateTestCasesDoc runs over
+  // every case block, applied here to the single resolved case's own block
+  // text. This is deliberately enforced at this layer (not only by the CLI's
+  // --case branch) so every current and future caller of findCase — the
+  // documented `--file <path> --case <id>` dispatch-time lookup included —
+  // gets the same guarantee, independent of whether the caller also chose to
+  // validate the whole document first (CR-01).
+  const blockText = lines.slice(index, parsed.nextIndex).join('\n');
+  for (const flag of FORBIDDEN_DISPATCH_FLAGS) {
+    if (blockText.includes(flag)) {
+      throw new TestCaseFormatError(
+        `Case "${id}" contains forbidden dispatch flag "${flag}" — a case document must never ` +
+          `pre-approve an action; the confirmation protocol runs at execution time, not generation time`
+      );
+    }
+  }
 
   return {
     id: parsed.id,
