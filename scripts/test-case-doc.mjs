@@ -368,9 +368,11 @@ export function findCase(markdown, caseId) {
  * `Tipo` and `Ejecución` in their allowed sets; no duplicate ID; no gap in
  * the `case-N` sequence starting from 1; every `negativo`/`edge` case
  * carries a file-and-line citation in its `Resultado esperado`; and no case
- * block contains a literal from `FORBIDDEN_DISPATCH_FLAGS` — a generated document
- * that pre-approves an action would route a destructive call around the
- * confirmation gate, and this is the check that makes shipping that
+ * block, surface heading/`Origen del surface` line, or document metadata
+ * line (`**Instrucción:**` in particular — WR-04) contains a literal from
+ * `FORBIDDEN_DISPATCH_FLAGS` — a generated document that pre-approves an
+ * action would route a destructive call around the confirmation gate, and
+ * this is the check that makes shipping that
  * accidentally impossible.
  */
 export function validateTestCasesDoc(markdown) {
@@ -387,6 +389,26 @@ export function validateTestCasesDoc(markdown) {
   for (const [label, key] of METADATA_KEYS) {
     if (!metadata[key]) {
       errors.push(`Document metadata is missing "${label}"`);
+    }
+  }
+
+  // The per-case-block scan below only covers each case's own bullets — it
+  // never looked at the metadata block, in particular the verbatim
+  // **Instrucción:** field (references/test-case-format.md's "Scoped-origin
+  // variant" requires it carry "the developer's words verbatim ... never a
+  // paraphrase"), which means developer text that happens to contain a
+  // forbidden literal (e.g. "corré esto sin usar --confirmed todavía") was
+  // written into the document unfiltered. SKILL.md's own framing of this
+  // control has no "within a case block" qualifier ("validateTestCasesDoc
+  // refuses any document carrying a literal from FORBIDDEN_DISPATCH_FLAGS"),
+  // so the metadata block is scanned too, closing that gap (WR-04).
+  const metadataBlockText = lines.slice(0, nextIndex).join('\n');
+  for (const flag of FORBIDDEN_DISPATCH_FLAGS) {
+    if (metadataBlockText.includes(flag)) {
+      errors.push(
+        `Document metadata contains forbidden dispatch flag "${flag}" — a case document must never ` +
+          `pre-approve an action; the confirmation protocol runs at execution time, not generation time`
+      );
     }
   }
 
@@ -422,6 +444,18 @@ export function validateTestCasesDoc(markdown) {
       i = originLine + 1;
     } else {
       errors.push(`Surface "${surfaceHeading}" is missing its required "**Origen del surface:**" line`);
+    }
+
+    // WR-04 (continued): the surface heading and its Origen del surface
+    // line sit outside every case block too — scan them the same way.
+    const surfaceBlockText = `${surfaceMatch[0]}\n${originLine < lines.length ? lines[originLine] : ''}`;
+    for (const flag of FORBIDDEN_DISPATCH_FLAGS) {
+      if (surfaceBlockText.includes(flag)) {
+        errors.push(
+          `Surface "${surfaceHeading}" contains forbidden dispatch flag "${flag}" — a case document must never ` +
+            `pre-approve an action; the confirmation protocol runs at execution time, not generation time`
+        );
+      }
     }
 
     while (i < lines.length && !SURFACE_HEADING_RE.test(lines[i])) {

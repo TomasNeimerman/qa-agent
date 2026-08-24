@@ -262,6 +262,23 @@ describe('validateTestCasesDoc — one assertion per failure mode', () => {
     expect(result.errors.some((e) => e.includes('--confirmed') && e.includes('case-1'))).toBe(true);
   });
 
+  it('a forbidden dispatch flag inside the metadata **Instrucción:** field is invalid (WR-04)', () => {
+    const mutated = golden.replace(
+      '**Instrucción:** (vacío — escaneo completo, no instrucción puntual)',
+      '**Instrucción:** correr con --confirmed siempre'
+    );
+    const result = validateTestCasesDoc(mutated);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('--confirmed') && e.toLowerCase().includes('metadata'))).toBe(true);
+  });
+
+  it('a forbidden dispatch flag inside a surface heading is invalid (WR-04)', () => {
+    const mutated = golden.replace('## POST /api/categorias', '## POST /api/categorias --confirmed');
+    const result = validateTestCasesDoc(mutated);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('--confirmed') && e.includes('POST /api/categorias'))).toBe(true);
+  });
+
   it('a single deleted case reports exactly one gap, not a cascade of false gaps for every case after it (WR-01)', () => {
     // Delete case-5's entire block (its heading through the line before
     // case-6's heading), leaving 1, 2, 3, 4, 6, 7, ... — the exact D-06
