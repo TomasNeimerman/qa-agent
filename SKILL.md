@@ -84,7 +84,7 @@ reads one table, not two:
 | 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
 | 7 | Login failed (`ui-login.mjs` only) — the login form was found but the supplied `QA_AGENT_UI_USER` was rejected, or no post-login state change occurred; no storage-state file is written |
 | 8 | Refused — a resolved path (`--project-root`/`--migrations-dir`, or a file inside the migrations directory) fell outside the target project root (`discover-schema.mjs` only) |
-| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse or validate back after being written, or a case named for `## Running generated cases` could not be resolved (`scripts/test-case-doc.mjs --file <path> [--case <id>]`; stderr names every offending case ID) |
+| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse or validate back after being written, or a case named when running generated cases (see the section below `## Case generation protocol`) could not be resolved (`scripts/test-case-doc.mjs --file <path> [--case <id>]`; stderr names every offending case ID) |
 
 ## UI authentication and session reuse
 
@@ -253,13 +253,53 @@ generation protocol` below.
 1. **Decide whether this invocation is a full-project scan or a one-off
    scoped instruction**, and say which in chat before starting (D-07/D-12).
    No qualifier beyond a project path means full-project scan of the whole
-   repository under the detected router-layout roots (step 3 below) — a
+   repository under the detected router-layout roots (step 4 below) — a
    narrower scan is reached by naming a flow in the instruction, never by a
    separate mode or a flag.
-2. **Resolve the target project root to an absolute path and pick one run
-   id**, in the same `YYYY-MM-DD-HHmm-<slug>` form `## Run protocol` step 3
-   already uses.
-3. **Detect the router layout** from the target's folder structure before
+2. **If this is a one-off scoped instruction, follow this branch instead of
+   steps 3–12 below** (D-12) — it is self-contained and ends at its own
+   hand-off, so a reader follows one branch or the other rather than
+   reading the full-scan procedure below and mentally subtracting from it:
+   - Resolve the target project root to an absolute path and pick one run
+     id, exactly as step 3 below does for a full scan.
+   - Detect the router layout, exactly as step 4 below does — the grep
+     below still needs to know whether it is looking under `app/` or
+     `pages/api/` before it can resolve anything.
+   - Resolve the instruction to specific files by grepping its nouns — a
+     path fragment, an entity name, a form or page name — against the
+     router roots just detected. Do not glob the repository.
+   - If nothing resolves, stop and ask the developer which route, folder
+     or file to look at. Do not fall back to a full scan: the developer
+     asked for one flow, and quietly scanning the whole project spends
+     their budget on something they did not request and produces a
+     document whose scope does not match its instruction line.
+   - If more than one surface resolves, list what was found and ask
+     which. Do not pick.
+   - Read only the resolved files, plus the two things a surface
+     genuinely needs to be understood: for a client-fetch form, the API
+     handler it posts to; for a colocated Server Action, the action
+     module. Reading two files for one form is the correct cost, and it
+     is a different thing from an unscoped repository sweep.
+   - Read migration constraints only for the tables the resolved surface
+     actually writes to, invoking `discover-schema.mjs` exactly as step 9
+     below does — never by eye.
+   - Ground every precondición, paso and resultado esperado in what those
+     files literally say. Never fabricate a constraint that was not read,
+     and never carry an assumption across from a different project or a
+     different flow. This is Phase 1's shape-observed discipline applied
+     to generation instead of dispatch.
+   - Record what was looked at, exactly as step 11 below does for a full
+     scan, except `Alcance` here lists the individual files actually
+     read, never a glob — the scoped-origin metadata variant
+     `references/test-case-format.md` documents.
+   - Hand the result to `## Case generation protocol` below unchanged.
+     The document format is identical whether the source was a full scan
+     or one instruction (D-05) — only the origin, instruction and scope
+     metadata lines differ.
+3. **For a full-project scan, resolve the target project root to an
+   absolute path and pick one run id**, in the same `YYYY-MM-DD-HHmm-<slug>`
+   form `## Run protocol` step 3 already uses.
+4. **Detect the router layout** from the target's folder structure before
    globbing anything (D-08): an `app` directory with at least one handler
    or page file means App Router; its absence with a `pages/api` directory
    present means Pages Router; both present means both trees are scanned;
@@ -269,7 +309,7 @@ generation protocol` below.
    the route or folder to scan — never emit an empty test-cases document
    for a layout that was simply unrecognised. Full heuristic detail:
    `references/discovery-nextjs.md`.
-4. **Glob the target's API handlers and pages under the detected roots** —
+5. **Glob the target's API handlers and pages under the detected roots** —
    `app/**/route.ts` and `app/**/page.tsx` for App Router,
    `pages/api/**/*.ts` for Pages Router, both when the layout is `both` —
    always excluding `node_modules`, `.next`, `dist`, `build`, `out`,
@@ -279,40 +319,40 @@ generation protocol` below.
    `references/discovery-nextjs.md`; read that file rather than
    re-deriving the rule from scratch, the same way `## Confirmation
    protocol` step 1 defers to `references/destructive-classification.md`.
-5. **Read each matched handler** and record, for every exported HTTP verb
+6. **Read each matched handler** and record, for every exported HTTP verb
    function (App Router) or every branch of the method switch (Pages
    Router), each early-return validation check with its file, line,
    literal message and status code. These apps validate imperatively, not
    with a schema library — finding no schema import is not evidence that a
    route is unvalidated; read the handler body itself before concluding
    that.
-6. **For each matched page, apply the form-mechanism check** from
+7. **For each matched page, apply the form-mechanism check** from
    `references/discovery-nextjs.md` before deciding anything about that
    surface: look in the same directory for a colocated `actions.ts`
    carrying the server directive first — if present the surface is
    server-action-backed; if absent and the page calls `fetch()` against an
    API path, the surface is client-fetch-backed and resolves to that
    handler.
-7. **Invoke `node <skill-dir>/scripts/discover-schema.mjs --project-root
+8. **Invoke `node <skill-dir>/scripts/discover-schema.mjs --project-root
    <target>`** through the Bash tool and read its JSON. Never read
    migration SQL by eye to decide what a constraint says — a policy
    predicate (`WITH CHECK`) and a data constraint (`CHECK`) share the same
    substring, and this script is the only tier permitted to make that call
    (03-RESEARCH.md Pattern 3).
-8. **Name each discovered surface** using the convention `## Case
+9. **Name each discovered surface** using the convention `## Case
    generation protocol` below groups by: an HTTP method and path for an
    API surface (e.g. `POST /api/categorias`), and a route path plus
    mechanism for a UI surface (e.g. `UI /login (Server Action)`).
-9. **Stay inside the resolved project root for the whole scan.** Never
-   follow a symlink that points outside it, and never open a file outside
-   `references/discovery-nextjs.md`'s documented allowlist even when it
-   looks relevant (T-03-07, T-03-09).
-10. **Record what was looked at.** The detected router layout goes on the
+10. **Stay inside the resolved project root for the whole scan.** Never
+    follow a symlink that points outside it, and never open a file outside
+    `references/discovery-nextjs.md`'s documented allowlist even when it
+    looks relevant (T-03-07, T-03-09).
+11. **Record what was looked at.** The detected router layout goes on the
     generated document's `Router` metadata line; the globs actually
     scanned and the exclusions applied go on its `Alcance` line, per
     `references/test-case-format.md`. A reader must be able to tell what
     was looked at from what was found.
-11. **Hand everything recorded** — the route handlers' imperative checks,
+12. **Hand everything recorded** — the route handlers' imperative checks,
     the classified form surfaces, and `discover-schema.mjs`'s JSON — to
     `## Case generation protocol` below.
 
@@ -337,6 +377,20 @@ and labeling rule before writing anything.
   rule**: a failure the code itself announces is `negativo`; a failure that
   exists only at the database layer, or an expectation inferred from
   current behavior rather than a stated message, is `edge` and must say so.
+  Concretely: a handler that explicitly returns a duplicate-name conflict
+  with its own message (`{ error: "Ya existe una categoría con ese
+  nombre" }`, 409) grounds a `negativo` case quoting that message verbatim.
+  A table with only a database-level `UNIQUE` constraint and no matching
+  handler check grounds an `edge` case whose `Resultado esperado` says the
+  HTTP behaviour was not verified in the route's code and names the
+  migration file and line the constraint came from — an expected result
+  inferred from how the code currently behaves is never asserted as a
+  requirement.
+- **The chat summary and the document's scope line describe what this pass
+  observed, never that a surface is fully covered.** Systematic boundary
+  and permission coverage is a later phase's job (DISC-04/DISC-05); this
+  phase records what one discovery pass found, and claiming that pass is
+  complete would make a partial scan read like a guarantee.
 - **A literal credential, token or connection string read out of the
   target project is never reproduced** in the document — the shape of a
   constraint is written down, its secret values never are.
@@ -357,6 +411,56 @@ and labeling rule before writing anything.
   absolute path of the written file — then stop. Running a case is a
   separate, later request (D-11); this invocation never runs one in the
   same turn it generated them.
+
+## Running generated cases
+
+This is D-11's handoff — the developer names a generated document and one
+or more case IDs, and those cases dispatch through the existing Phase 1/2
+executors unchanged. Phase 3 introduces no new execution path; this
+section's whole job is to reach `## Case construction`/`## Confirmation
+protocol` (API) or `## UI run protocol`/`## UI confirmation protocol` (UI)
+exactly as they already stand.
+
+1. **The developer names a document path and one or more case IDs** (e.g.
+   "corré los casos 1, 3 y 5 de qa-reports/2026-08-24-1105-categorias-test-cases.md").
+2. **Re-read that document from disk at that moment.** It is meant to be
+   edited by hand, so cases may have been struck out, added or rewritten
+   since it was written (D-06). Never act on a remembered version from
+   earlier in the conversation, and never assume the IDs still mean what
+   they meant at generation time.
+3. **Resolve each named case by invoking the reader's CLI** — `node
+   <skill-dir>/scripts/test-case-doc.mjs --file <path> --case <id>` —
+   through the Bash tool, and read its JSON. Never grep the document and
+   read the matched heading by eye: a short ID is a substring of a longer
+   one (`case-1` inside `case-12`), and this is the same reason an HTTP
+   verdict comes from `api-client.mjs`'s JSON rather than from reading raw
+   output. An exit code other than 0 means the case could not be resolved
+   — report the CLI's own message and stop for that case rather than
+   guessing at what was meant.
+4. **Dispatch by the case's `Ejecución` field.** For `API`, construct the
+   `api-client.mjs` invocation exactly as `## Case construction` already
+   specifies, using the case's `Pasos` as the developer's instruction. For
+   `UI`, follow `## UI run protocol` from step 2 onward, using the case's
+   `Pasos` to derive the step loop. Neither protocol changes for a case
+   that arrived this way instead of from a fresh natural-language
+   instruction.
+5. **Every case still passes through `## Confirmation protocol` or `## UI
+   confirmation protocol` at dispatch.** A case document is a description,
+   never an approval: a case whose steps describe a destructive action
+   stops and asks exactly as it would have without a document. This is why
+   `validateTestCasesDoc` refuses any document carrying a literal from
+   `FORBIDDEN_DISPATCH_FLAGS` (exit 9) — a document that already carried
+   `--confirmed` would be an approval nobody gave in this moment.
+6. **Render the report with `scripts/format-report.mjs`**, exactly as
+   `## Run protocol` step 5 already specifies. Cases run this way produce
+   an ordinary run report; results are never written back into the case
+   document — the document and the report are two separate artifacts, and
+   running a case never mutates the document it came from.
+
+Closing note, in the other direction from D-10: generating a document
+never runs a case in the same invocation, and running cases the way this
+section describes never regenerates the document. Each is a terminal step
+for its own invocation.
 
 ## Case construction
 

@@ -277,3 +277,50 @@ describe('exports', () => {
     }
   });
 });
+
+describe('the scoped golden document (DISC-03 metadata variant)', () => {
+  const SCOPED_DOC_PATH = resolve(__dirname, '__fixtures__/sample-test-cases-scoped.md');
+  const scoped = readFileSync(SCOPED_DOC_PATH, 'utf8');
+
+  it('parses and validates cleanly', () => {
+    expect(() => parseTestCasesDoc(scoped)).not.toThrow();
+    const result = validateTestCasesDoc(scoped);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('has a metadata origin and instruction that differ from the full-scan golden document', () => {
+    const fullScan = parseTestCasesDoc(golden);
+    const doc = parseTestCasesDoc(scoped);
+    expect(doc.metadata.origen).not.toBe(fullScan.metadata.origen);
+    expect(doc.metadata.instruccion).not.toBe(fullScan.metadata.instruccion);
+    expect(doc.metadata.origen).toContain('Instrucción puntual');
+    expect(doc.metadata.instruccion).toBeTruthy();
+  });
+
+  it('has the same case structure (five fields + Ejecución, grouped by surface) as the full-scan document', () => {
+    const doc = parseTestCasesDoc(scoped);
+    expect(doc.surfaces.length).toBeGreaterThanOrEqual(1);
+    const allCases = doc.surfaces.flatMap((s) => s.cases);
+    expect(allCases.length).toBeGreaterThanOrEqual(3);
+    for (const c of allCases) {
+      expect(c.titulo).toBeTruthy();
+      expect(c.precondiciones).toBeTruthy();
+      expect(c.pasos).toBeTruthy();
+      expect(c.resultadoEsperado).toBeTruthy();
+      expect(CASE_TYPES).toContain(c.tipo);
+      expect(EXECUTION_MODES).toContain(c.ejecucion);
+    }
+  });
+
+  it('names individual files on its scope line, never a glob pattern', () => {
+    const doc = parseTestCasesDoc(scoped);
+    expect(doc.metadata.alcance).not.toMatch(/\*/);
+    expect(doc.metadata.alcance).toContain('app/login/actions.ts');
+    expect(doc.metadata.alcance).toContain('app/login/page.tsx');
+  });
+
+  it('is not byte-identical to the full-scan golden document', () => {
+    expect(scoped).not.toBe(golden);
+  });
+});
