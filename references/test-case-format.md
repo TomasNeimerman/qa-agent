@@ -63,6 +63,38 @@ Exactly five bold-labelled lines, in this order:
   was found — a surface with nothing reported is not proof nothing exists
   there, only proof it wasn't in scope.
 
+### Scoped-origin variant (DISC-03)
+
+When the document came from a one-off natural-language instruction rather
+than a full-project scan (D-12), the same five lines carry the scoped
+story instead of the full-scan one:
+
+```
+**Generado:** 2026-08-24 11:05
+**Origen:** Instrucción puntual — c:/dotax
+**Instrucción:** probá el login de usuarios
+**Router:** App Router (app/)
+**Alcance:** app/login/actions.ts, app/login/page.tsx — resuelto desde la
+  instrucción, no un glob del proyecto
+```
+
+- `**Origen:**` names "Instrucción puntual" (not "Escaneo completo de
+  proyecto") plus the same absolute target project path — a reader must be
+  able to tell a scoped pass from a full scan at a glance, not by
+  inference from the other four lines.
+- `**Instrucción:**` carries the developer's words verbatim — never the
+  empty marker a full scan uses, and never a paraphrase of what was asked.
+- `**Alcance:**` lists the specific files the scoped branch actually read,
+  one per file, never a glob pattern. A glob on this line in a scoped
+  document is itself a defect: it means the pass silently widened past the
+  one flow the developer named (D-12, T-03-16), and a reader must be able
+  to see exactly how narrow the pass was from this line alone.
+
+Every other section of the document — surface headings, `Origen del
+surface`, and every case block — is byte-identical in structure to a
+full-scan document (D-05: one output convention regardless of source).
+Only these five metadata lines differ.
+
 ## 3. Surface headings
 
 One `##` heading per discovered surface (D-05), named the way a developer
@@ -143,6 +175,21 @@ invented constraint this document's opening invariant forbids.
   oracle-problem guard (03-RESEARCH.md Pitfall 4): current behavior is not
   automatically correct behavior, and labeling it `negativo` would overstate
   that authority.
+
+### Dispatch-flag prohibition
+
+A case document is written at generation time and read back later, at
+execution-request time (D-06, D-11) — so a case's `Pasos` or `Resultado
+esperado` must never contain a literal `scripts/api-client.mjs` dispatch
+flag (`--confirmed`, `--read-only-intent`, `--allow-non-local`). A flag
+sitting in the document would be an approval nobody actually gave in the
+moment the case is run, silently routing a destructive call around
+`## Confirmation protocol`'s pause — exactly the elevation-of-privilege
+threat `03-03-PLAN.md`'s threat register names as `T-03-12`.
+`scripts/test-case-doc.mjs`'s `validateTestCasesDoc` enforces this rule, exported as
+`FORBIDDEN_DISPATCH_FLAGS`, and rejects any document containing one of
+these literals — by name, and naming which case it was found in — with
+exit code 9, before any case from that document is acted on.
 
 ## Worked example
 

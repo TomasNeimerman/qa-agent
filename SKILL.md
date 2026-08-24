@@ -84,7 +84,7 @@ reads one table, not two:
 | 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
 | 7 | Login failed (`ui-login.mjs` only) — the login form was found but the supplied `QA_AGENT_UI_USER` was rejected, or no post-login state change occurred; no storage-state file is written |
 | 8 | Refused — a resolved path (`--project-root`/`--migrations-dir`, or a file inside the migrations directory) fell outside the target project root (`discover-schema.mjs` only) |
-| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse back after being written (reserved here, wired up by plan 03-03's `test-case-doc.mjs` CLI) |
+| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse or validate back after being written, or a case named for `## Running generated cases` could not be resolved (`scripts/test-case-doc.mjs --file <path> [--case <id>]`; stderr names every offending case ID) |
 
 ## UI authentication and session reuse
 
@@ -346,10 +346,12 @@ and labeling rule before writing anything.
   already there — exactly as `format-report.mjs` does for execution
   reports.
 - **Validate the written file by parsing it back** before telling the
-  developer anything — read the freshly written file and confirm it
-  conforms before reporting success. (Automated parsing via
-  `scripts/test-case-doc.mjs`'s CLI is wired up in plan 03-03; until then,
-  re-read the file and confirm every case carries its five fields.)
+  developer anything — invoke
+  `node <skill-dir>/scripts/test-case-doc.mjs --file <path>` through the
+  Bash tool and confirm it exits 0 with `valid: true`. A non-zero exit
+  means the document was written malformed; fix it and re-validate before
+  reporting success — never tell the developer a document is ready on the
+  strength of eyeballing it.
 - **Close with the terminal-step rule (D-10):** post a chat summary
   carrying the surface count, the case count broken down by `Tipo`, and the
   absolute path of the written file — then stop. Running a case is a

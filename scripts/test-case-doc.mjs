@@ -13,6 +13,23 @@
 // The structure this module reads is the contract defined in
 // references/test-case-format.md — see that file before changing anything
 // here, since the two must never drift apart.
+//
+// CLI exit codes:
+//   0 = document valid (or, with --case, the requested case was found and
+//       printed) — exactly one line of JSON on stdout
+//   2 = --file is missing, or the given path does not exist; stderr names
+//       what is missing
+//   9 = the document failed to parse or validate (a missing field, an
+//       out-of-set Tipo/Ejecución, a duplicate or gapped ID, a missing
+//       citation, or a forbidden dispatch flag) — the full error list is
+//       written to stderr before any case from it is acted on
+// Codes 3-8 keep the meanings scripts/api-client.mjs and
+// scripts/discover-schema.mjs already assigned them and are never reused
+// here.
+
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export class TestCaseFormatError extends Error {}
 
@@ -30,6 +47,23 @@ export const CASE_FIELDS = ['Precondiciones', 'Pasos', 'Resultado esperado', 'Ti
 export const CASE_TYPES = ['positivo', 'negativo', 'edge'];
 export const EXECUTION_MODES = ['API', 'UI'];
 
+// The three scripts/api-client.mjs CLI flags that pre-approve or bypass its
+// destructive-action gate: --confirmed dispatches a call the confirmation
+// protocol would otherwise pause on, --read-only-intent waves a mutating
+// method through without a pause, and --allow-non-local unlocks a
+// production-looking target. A generated test-case document is written at
+// discovery time and read back later, at execution-request time (D-06,
+// D-11) — a flag sitting inside it would be an approval nobody actually
+// gave in the moment the case is run, which is exactly what the
+// confirmation protocol (SKILL.md `## Confirmation protocol`) exists to
+// prevent. validateTestCasesDoc rejects any document carrying one of these
+// literals, by name, before any case from it is acted on.
+export const FORBIDDEN_DISPATCH_FLAGS = Object.freeze([
+  '--confirmed',
+  '--read-only-intent',
+  '--allow-non-local',
+]);
+
 const METADATA_KEYS = [
   ['Generado', 'generado'],
   ['Origen', 'origen'],
@@ -41,6 +75,11 @@ const METADATA_KEYS = [
 const SURFACE_HEADING_RE = /^## (.+)$/;
 const ORIGEN_DEL_SURFACE_RE = /^\*\*Origen del surface:\*\*\s*(.*)$/;
 const BULLET_RE = /^-?\s*\*\*([^*]+):\*\*\s*(.*)$/;
+
+// A path fragment followed by a colon and one or more digits — the
+// file-and-line citation references/test-case-format.md's citation rule
+// requires inside every negativo/edge case's Resultado esperado.
+const CITATION_RE = /[\w./-]+:\d+/;
 
 function parseMetadata(lines, startIndex) {
   const metadata = {};
@@ -58,7 +97,13 @@ function parseMetadata(lines, startIndex) {
   return { metadata, nextIndex: i };
 }
 
-function parseCaseBlock(lines, headingIndex, id, title) {
+// Scans forward from a case heading, collecting the recognised bullet
+// fields, until the next case heading or surface heading. Never throws —
+// this is the shared, non-throwing scan both parseCaseBlock (which adds the
+// throwing checks parseTestCasesDoc needs) and validateTestCasesDoc (which
+// collects every problem instead of stopping at the first) build on, so the
+// two never drift apart on what counts as a field.
+function scanCaseFields(lines, headingIndex) {
   const fields = {};
   let i = headingIndex + 1;
   for (; i < lines.length; i += 1) {
@@ -71,6 +116,11 @@ function parseCaseBlock(lines, headingIndex, id, title) {
       fields[label] = match[2].trim();
     }
   }
+  return { fields, nextIndex: i };
+}
+
+function parseCaseBlock(lines, headingIndex, id, title) {
+  const { fields, nextIndex } = scanCaseFields(lines, headingIndex);
 
   for (const field of CASE_FIELDS) {
     if (!fields[field]) {
@@ -104,7 +154,7 @@ function parseCaseBlock(lines, headingIndex, id, title) {
     tipo,
     ejecucion,
     line: headingIndex + 1,
-    nextIndex: i,
+    nextIndex,
   };
 }
 
@@ -201,4 +251,283 @@ export function parseTestCasesDoc(markdown) {
   }
 
   return { title, metadata, surfaces };
+}
+
+/**
+ * Looks up exactly one case by its short ID (`findCase(doc, 'case-1')`, or
+ * the bare number `findCase(doc, '1')`) using `CASE_HEADING_PATTERN` — the
+ * same anchored pattern `parseTestCasesDoc` scans with, requiring the full
+ * ID followed by the " — " heading delimiter. This is what keeps a lookup
+ * for `case-1` from ever matching inside the heading for `case-12`: a bare
+ * substring test would find "case-1" as a prefix of "case-12" and return
+ * the wrong case, or two at once, the moment a document has 10+ cases
+ * (03-RESEARCH.md Pitfall 5). Returns the case's fields plus the surface
+ * heading it is grouped under. Throws `TestCaseFormatError` when the ID is
+ * not present (naming the requested ID and listing every ID the document
+ * does contain) or when it is ambiguous — two headings claiming the same ID
+ * — because an ambiguous document must never resolve silently to the first
+ * match.
+ */
+export function findCase(markdown, caseId) {
+  const id = /^\d+$/.test(String(caseId)) ? `case-${caseId}` : String(caseId);
+  const lines = markdown.split(/\r?\n/);
+
+  let currentSurface = null;
+  const allIds = [];
+  const matches = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const surfaceMatch = lines[i].match(SURFACE_HEADING_RE);
+    if (surfaceMatch) {
+      currentSurface = surfaceMatch[1].trim();
+      continue;
+    }
+    const headingMatch = lines[i].match(CASE_HEADING_PATTERN);
+    if (!headingMatch) continue;
+    const [, foundId, title] = headingMatch;
+    allIds.push(foundId);
+    if (foundId === id) {
+      matches.push({ index: i, title, surface: currentSurface });
+    }
+  }
+
+  if (matches.length === 0) {
+    throw new TestCaseFormatError(
+      `Case "${id}" not found. This document contains: ${allIds.join(', ') || '(no cases)'}`
+    );
+  }
+  if (matches.length > 1) {
+    throw new TestCaseFormatError(
+      `Case ID "${id}" is ambiguous — it appears in ${matches.length} headings in this document; ` +
+        `an ambiguous document is never resolved to the first match`
+    );
+  }
+
+  const { index, title, surface } = matches[0];
+  const parsed = parseCaseBlock(lines, index, id, title);
+
+  return {
+    id: parsed.id,
+    index: parsed.index,
+    titulo: parsed.titulo,
+    precondiciones: parsed.precondiciones,
+    pasos: parsed.pasos,
+    resultadoEsperado: parsed.resultadoEsperado,
+    tipo: parsed.tipo,
+    ejecucion: parsed.ejecucion,
+    line: parsed.line,
+    surface,
+  };
+}
+
+/**
+ * Validates a test-cases document against every rule
+ * `references/test-case-format.md` states, collecting every violation
+ * instead of throwing on the first — a developer fixing a hand-edited
+ * document needs the whole list in one pass, not one error per re-run.
+ * Returns `{ valid, errors, warnings, counts }`, where `counts` carries
+ * `surfaces`, `cases`, `byTipo` (positivo/negativo/edge) and `byEjecucion`
+ * (API/UI) totals. Checks: every required field present; `Tipo` and
+ * `Ejecución` in their allowed sets; no duplicate ID; no gap in the
+ * `case-N` sequence starting from 1; every `negativo`/`edge` case carries a
+ * file-and-line citation in its `Resultado esperado`; and no case block
+ * contains a literal from `FORBIDDEN_DISPATCH_FLAGS` — a generated document
+ * that pre-approves an action would route a destructive call around the
+ * confirmation gate, and this is the check that makes shipping that
+ * accidentally impossible.
+ */
+export function validateTestCasesDoc(markdown) {
+  const errors = [];
+  const warnings = [];
+  const lines = markdown.split(/\r?\n/);
+
+  const h1Line = lines.find((l) => l.startsWith('# '));
+  if (!h1Line) {
+    errors.push('Document is missing its H1 title line ("# Casos de Prueba — ...")');
+  }
+
+  const { metadata, nextIndex } = parseMetadata(lines, 0);
+  for (const [label, key] of METADATA_KEYS) {
+    if (!metadata[key]) {
+      errors.push(`Document metadata is missing "${label}"`);
+    }
+  }
+
+  const counts = {
+    surfaces: 0,
+    cases: 0,
+    byTipo: { positivo: 0, negativo: 0, edge: 0 },
+    byEjecucion: { API: 0, UI: 0 },
+  };
+
+  let i = nextIndex;
+  let expectedIndex = 1;
+  const seenIds = new Set();
+
+  while (i < lines.length) {
+    const surfaceMatch = lines[i].match(SURFACE_HEADING_RE);
+    if (!surfaceMatch) {
+      i += 1;
+      continue;
+    }
+    counts.surfaces += 1;
+    i += 1;
+
+    if (i < lines.length && ORIGEN_DEL_SURFACE_RE.test(lines[i])) {
+      i += 1;
+    }
+
+    while (i < lines.length && !SURFACE_HEADING_RE.test(lines[i])) {
+      const headingMatch = lines[i].match(CASE_HEADING_PATTERN);
+      if (!headingMatch) {
+        i += 1;
+        continue;
+      }
+      const [, id] = headingMatch;
+      counts.cases += 1;
+
+      if (seenIds.has(id)) {
+        errors.push(`Duplicate case ID "${id}" — case IDs must be unique within the document`);
+      } else {
+        seenIds.add(id);
+      }
+
+      const expectedId = `case-${expectedIndex}`;
+      if (id !== expectedId) {
+        errors.push(`Case ID sequence gap: expected "${expectedId}", found "${id}"`);
+      }
+      expectedIndex += 1;
+
+      const { fields, nextIndex: caseNext } = scanCaseFields(lines, i);
+
+      for (const field of CASE_FIELDS) {
+        if (!fields[field]) {
+          errors.push(`Case ${id} is missing its required "${field}" field`);
+        }
+      }
+
+      const tipo = fields['Tipo'];
+      if (tipo) {
+        if (!CASE_TYPES.includes(tipo)) {
+          errors.push(`Case ${id} has an invalid Tipo "${tipo}" — must be one of ${CASE_TYPES.join(', ')}`);
+        } else {
+          counts.byTipo[tipo] += 1;
+        }
+      }
+
+      const ejecucion = fields['Ejecución'];
+      if (ejecucion) {
+        if (!EXECUTION_MODES.includes(ejecucion)) {
+          errors.push(
+            `Case ${id} has an invalid Ejecución "${ejecucion}" — must be one of ${EXECUTION_MODES.join(', ')}`
+          );
+        } else {
+          counts.byEjecucion[ejecucion] += 1;
+        }
+      }
+
+      if (tipo === 'negativo' || tipo === 'edge') {
+        const resultado = fields['Resultado esperado'] ?? '';
+        if (!CITATION_RE.test(resultado)) {
+          errors.push(
+            `Case ${id} — Tipo "${tipo}" requires a file-and-line citation in "Resultado esperado"`
+          );
+        }
+      }
+
+      const blockText = lines.slice(i, caseNext).join('\n');
+      for (const flag of FORBIDDEN_DISPATCH_FLAGS) {
+        if (blockText.includes(flag)) {
+          errors.push(
+            `Case ${id} contains forbidden dispatch flag "${flag}" — a case document must never ` +
+              `pre-approve an action; the confirmation protocol runs at execution time, not generation time`
+          );
+        }
+      }
+
+      i = caseNext;
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings, counts };
+}
+
+function parseArgs(argv) {
+  const args = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (token.startsWith('--')) {
+      const key = token.slice(2);
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith('--')) {
+        args[key] = true;
+      } else {
+        args[key] = next;
+        i += 1;
+      }
+    }
+  }
+  return args;
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const filePath = typeof args.file === 'string' ? resolve(args.file) : undefined;
+
+  if (!filePath) {
+    process.stderr.write('--file is required\n');
+    process.exit(2);
+    return;
+  }
+  if (!existsSync(filePath)) {
+    process.stderr.write(`File not found: ${filePath}\n`);
+    process.exit(2);
+    return;
+  }
+
+  const markdown = readFileSync(filePath, 'utf8');
+
+  if (typeof args.case === 'string') {
+    try {
+      const found = findCase(markdown, args.case);
+      process.stdout.write(`${JSON.stringify(found)}\n`);
+      process.exit(0);
+    } catch (err) {
+      if (err instanceof TestCaseFormatError) {
+        process.stderr.write(`${err.message}\n`);
+        process.exit(9);
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  const result = validateTestCasesDoc(markdown);
+  if (!result.valid) {
+    process.stderr.write(`${result.errors.join('\n')}\n`);
+    process.exit(9);
+    return;
+  }
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+  process.exit(0);
+}
+
+// See api-client.mjs for why this resolves realpaths before comparing —
+// a plain URL/string comparison breaks under the documented symlink/junction
+// install method (README "Installation").
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+}
+const isMain = isMainModule();
+if (isMain) {
+  main().catch((err) => {
+    process.stderr.write(`${err.stack ?? err.message}\n`);
+    process.exit(1);
+  });
 }
