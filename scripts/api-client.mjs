@@ -89,7 +89,7 @@ export function readConfig({ baseUrlArg, projectRoot, storageStatePath } = {}) {
   for (const filename of ['.env.local', '.env']) {
     const path = resolve(root, filename);
     if (existsSync(path)) {
-      dotenv.config({ path, override: false });
+      dotenv.config({ path, override: false, quiet: true });
     }
   }
 
