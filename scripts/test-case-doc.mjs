@@ -418,7 +418,13 @@ export function validateTestCasesDoc(markdown) {
       if (id !== expectedId) {
         errors.push(`Case ID sequence gap: expected "${expectedId}", found "${id}"`);
       }
-      expectedIndex += 1;
+      // Resync from the ID actually found rather than blindly incrementing
+      // (WR-01) — otherwise one real gap cascades into a spurious error for
+      // every case that follows it, burying the one genuine problem in noise
+      // and defeating this function's whole point of collecting every
+      // violation in one pass.
+      const foundNum = Number(id.slice('case-'.length));
+      expectedIndex = (Number.isInteger(foundNum) ? foundNum : expectedIndex) + 1;
 
       const { fields, nextIndex: caseNext } = scanCaseFields(lines, i);
 

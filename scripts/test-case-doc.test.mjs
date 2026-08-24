@@ -220,6 +220,27 @@ describe('validateTestCasesDoc — one assertion per failure mode', () => {
     expect(result.errors.some((e) => e.includes('--confirmed') && e.includes('case-1'))).toBe(true);
   });
 
+  it('a single deleted case reports exactly one gap, not a cascade of false gaps for every case after it (WR-01)', () => {
+    // Delete case-5's entire block (its heading through the line before
+    // case-6's heading), leaving 1, 2, 3, 4, 6, 7, ... — the exact D-06
+    // "case deleted by hand" scenario. Before the WR-01 fix, expectedIndex
+    // never resynced to the ID actually found, so every case from case-6
+    // onward was also flagged as a gap.
+    const lines = golden.split('\n');
+    const case5Start = lines.findIndex((l) => l.startsWith('### case-5 —'));
+    const case6Start = lines.findIndex((l) => l.startsWith('### case-6 —'));
+    expect(case5Start).toBeGreaterThan(-1);
+    expect(case6Start).toBeGreaterThan(case5Start);
+    const mutated = [...lines.slice(0, case5Start), ...lines.slice(case6Start)].join('\n');
+
+    const result = validateTestCasesDoc(mutated);
+    expect(result.valid).toBe(false);
+    const gapErrors = result.errors.filter((e) => e.includes('sequence gap'));
+    expect(gapErrors).toHaveLength(1);
+    expect(gapErrors[0]).toContain('case-5');
+    expect(gapErrors[0]).toContain('case-6');
+  });
+
   it('collects every error rather than throwing on the first', () => {
     let mutated = golden.replace('### case-2 —', '### case-1 —'); // duplicate
     mutated = mutated.replace('- **Tipo:** invalido\n', '- **Tipo:** invalido\n'); // no-op guard
