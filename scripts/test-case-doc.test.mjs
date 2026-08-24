@@ -131,6 +131,24 @@ describe('findCase — anchored lookup, the collision case', () => {
   });
 });
 
+describe('parseTestCasesDoc — surface structure', () => {
+  it('throws when a surface heading has no "**Origen del surface:**" line, naming the surface (WR-03)', () => {
+    const mutated = golden.replace(
+      '## POST /api/categorias\n\n**Origen del surface:** app/api/categorias/route.ts:12-41\n',
+      '## POST /api/categorias\n'
+    );
+    let thrown;
+    try {
+      parseTestCasesDoc(mutated);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(TestCaseFormatError);
+    expect(thrown.message).toContain('Origen del surface');
+    expect(thrown.message).toContain('POST /api/categorias');
+  });
+});
+
 describe('validateTestCasesDoc — the valid document', () => {
   it('returns valid with counts totalling 12 cases summing correctly by Tipo and Ejecución', () => {
     const result = validateTestCasesDoc(golden);
@@ -142,6 +160,20 @@ describe('validateTestCasesDoc — the valid document', () => {
     expect(tipoSum).toBe(12);
     expect(ejecucionSum).toBe(12);
     expect(result.counts.surfaces).toBeGreaterThanOrEqual(2);
+  });
+
+  it('parseTestCasesDoc captures every surface\'s Origen del surface line, blank line and all (WR-03 regression)', () => {
+    // The format's own worked example puts a blank line between a surface
+    // heading and its Origen line, and the golden fixture matches that —
+    // this locks in that the blank-line-skip added for WR-03 does not
+    // regress the ordinary case into a false "missing" error, and that
+    // `origen` is actually populated rather than silently left ''.
+    const doc = parseTestCasesDoc(golden);
+    expect(doc.surfaces.length).toBeGreaterThanOrEqual(2);
+    for (const surface of doc.surfaces) {
+      expect(surface.origen).toBeTruthy();
+    }
+    expect(doc.surfaces[0].origen).toBe('app/api/categorias/route.ts:12-41');
   });
 });
 
@@ -208,6 +240,16 @@ describe('validateTestCasesDoc — one assertion per failure mode', () => {
     // case-1 is positivo and already carries no file:line citation in golden.
     const result = validateTestCasesDoc(golden);
     expect(result.errors.some((e) => e.includes('case-1') && e.toLowerCase().includes('citation'))).toBe(false);
+  });
+
+  it('a surface heading with no "**Origen del surface:**" line is invalid, naming the surface (WR-03)', () => {
+    const mutated = golden.replace(
+      '## POST /api/categorias\n\n**Origen del surface:** app/api/categorias/route.ts:12-41\n',
+      '## POST /api/categorias\n'
+    );
+    const result = validateTestCasesDoc(mutated);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('Origen del surface') && e.includes('POST /api/categorias'))).toBe(true);
   });
 
   it('a document containing a forbidden dispatch flag anywhere is invalid, naming the flag and the case', () => {

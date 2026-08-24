@@ -167,9 +167,10 @@ function parseCaseBlock(lines, headingIndex, id, title) {
  * `{ id, index, titulo, precondiciones, pasos, resultadoEsperado, tipo, ejecucion, line }`.
  * Throws `TestCaseFormatError` — naming the offending case ID and the
  * specific problem — for a missing required field, an out-of-set `Tipo` or
- * `Ejecución` value, a duplicate ID, or an ID sequence that is not gapless
- * from `case-1`. A silent skip is the failure mode this function exists to
- * avoid: a malformed case that parsed to `undefined` would be a case nobody
+ * `Ejecución` value, a duplicate ID, an ID sequence that is not gapless from
+ * `case-1`, or a surface heading with no `**Origen del surface:**` line
+ * (WR-03). A silent skip is the failure mode this function exists to avoid:
+ * a malformed case that parsed to `undefined` would be a case nobody
  * noticed was dropped.
  */
 export function parseTestCasesDoc(markdown) {
@@ -202,14 +203,27 @@ export function parseTestCasesDoc(markdown) {
     const heading = surfaceMatch[1].trim();
     i += 1;
 
-    let origen = '';
-    if (i < lines.length) {
-      const origenMatch = lines[i].match(ORIGEN_DEL_SURFACE_RE);
-      if (origenMatch) {
-        origen = origenMatch[1].trim();
-        i += 1;
-      }
+    // references/test-case-format.md's "Section order" (item 3) requires
+    // every "##" surface heading to be followed by an "**Origen del
+    // surface:**" line — a non-negotiable structural requirement, not an
+    // optional one. Before WR-03, a missing line here just wasn't consumed
+    // and parsing silently moved on, leaving `origen: ''` with no error —
+    // exactly the silent-skip failure mode this module's own doc comment
+    // says it exists to avoid. Blank lines are skipped first: the format's
+    // own worked example puts a blank line between the heading and the
+    // Origen line, matching how every other block-scan in this module
+    // (scanCaseFields, parseMetadata) already treats a blank line as
+    // insignificant rather than as content.
+    let originLine = i;
+    while (originLine < lines.length && lines[originLine].trim() === '') originLine += 1;
+    const origenMatch = originLine < lines.length ? lines[originLine].match(ORIGEN_DEL_SURFACE_RE) : null;
+    if (!origenMatch) {
+      throw new TestCaseFormatError(
+        `Surface "${heading}" is missing its required "**Origen del surface:**" line`
+      );
     }
+    const origen = origenMatch[1].trim();
+    i = originLine + 1;
 
     const cases = [];
     while (i < lines.length && !SURFACE_HEADING_RE.test(lines[i])) {
@@ -349,11 +363,12 @@ export function findCase(markdown, caseId) {
  * document needs the whole list in one pass, not one error per re-run.
  * Returns `{ valid, errors, warnings, counts }`, where `counts` carries
  * `surfaces`, `cases`, `byTipo` (positivo/negativo/edge) and `byEjecucion`
- * (API/UI) totals. Checks: every required field present; `Tipo` and
- * `Ejecución` in their allowed sets; no duplicate ID; no gap in the
- * `case-N` sequence starting from 1; every `negativo`/`edge` case carries a
- * file-and-line citation in its `Resultado esperado`; and no case block
- * contains a literal from `FORBIDDEN_DISPATCH_FLAGS` — a generated document
+ * (API/UI) totals. Checks: every surface heading is followed by a
+ * `**Origen del surface:**` line (WR-03); every required field present;
+ * `Tipo` and `Ejecución` in their allowed sets; no duplicate ID; no gap in
+ * the `case-N` sequence starting from 1; every `negativo`/`edge` case
+ * carries a file-and-line citation in its `Resultado esperado`; and no case
+ * block contains a literal from `FORBIDDEN_DISPATCH_FLAGS` — a generated document
  * that pre-approves an action would route a destructive call around the
  * confirmation gate, and this is the check that makes shipping that
  * accidentally impossible.
@@ -393,10 +408,20 @@ export function validateTestCasesDoc(markdown) {
       continue;
     }
     counts.surfaces += 1;
+    const surfaceHeading = surfaceMatch[1].trim();
     i += 1;
 
-    if (i < lines.length && ORIGEN_DEL_SURFACE_RE.test(lines[i])) {
-      i += 1;
+    // Mirrors the parseTestCasesDoc throw above (WR-03): a "##" surface
+    // heading with no "**Origen del surface:**" line is a structural
+    // violation, collected here rather than thrown so a single validation
+    // pass still reports every other problem in the document too. Blank
+    // lines are skipped first — see the parseTestCasesDoc comment for why.
+    let originLine = i;
+    while (originLine < lines.length && lines[originLine].trim() === '') originLine += 1;
+    if (originLine < lines.length && ORIGEN_DEL_SURFACE_RE.test(lines[originLine])) {
+      i = originLine + 1;
+    } else {
+      errors.push(`Surface "${surfaceHeading}" is missing its required "**Origen del surface:**" line`);
     }
 
     while (i < lines.length && !SURFACE_HEADING_RE.test(lines[i])) {
