@@ -109,6 +109,49 @@ client-side JavaScript entirely. Record both signals if both are read, but
 derive an API-level negative case only from the server-side check, never
 from a client-side-only validation the API itself does not enforce.
 
+## Router-layout detection
+
+Before globbing anything, detect which router layout the target project
+uses (D-08) — a fixed, ordered check with four named outcomes:
+
+| Outcome | Condition |
+|---|---|
+| `app` | An `app` directory exists at the project root **and** contains at least one handler or page file (`app/**/route.ts` or `app/**/page.tsx` matches something). An `app` directory that exists but is empty of both does not by itself yield `app`. |
+| `pages` | No qualifying `app` directory, but a `pages/api` directory exists containing at least one file matching `pages/api/**/*.ts`. |
+| `both` | Both conditions above hold. Both trees are scanned, and the generated document records both. |
+| `unknown` | Neither condition holds. |
+
+`unknown` is a hard stop, not an empty result: report what was looked for
+(`app/` and `pages/api/`) and where (the resolved project root), and ask
+the developer to name the route or folder to scan. Never emit an empty
+document for an unrecognised layout — an empty document reads like a
+verdict about the project's testability rather than a limitation of the
+scan.
+
+**The Pages Router handler shape is genuinely different from the App
+Router's, not a variant of it.** A Pages Router handler is a single
+default-exported function that branches on the request method:
+
+```
+export\s+default\s+async\s+function\s+\w+\s*\(\s*req\s*,\s*res\s*\)
+```
+
+matched against files found by `pages/api/**/*.ts`. Applying the App
+Router's verb-export pattern to a Pages Router file finds nothing — the two
+layouts declare their handled methods in structurally different ways, and
+that silent-zero-results outcome is exactly why layout detection has to
+come first, rather than being a fallback tried only after a scan returns
+empty.
+
+**Honesty note.** The App Router branch above was confirmed empirically
+against all three real target projects (DATAX-web, dotax, franquix) — all
+three are App Router only. The Pages Router branch is defensive: none of
+the three target repos contains a `pages/api` directory, so this branch is
+validated against a fixture only
+(`scripts/__fixtures__/mock-target-repo-pages/`), never against a real
+repo. A reader deciding how much to trust a Pages Router result deserves
+to know which of those two they are looking at.
+
 ## Exclusions
 
 A scan never walks these directory names, in the target project or any of

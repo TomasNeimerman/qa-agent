@@ -24,6 +24,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const APP_FIXTURE = resolve(__dirname, '__fixtures__/mock-target-repo');
+const PAGES_FIXTURE = resolve(__dirname, '__fixtures__/mock-target-repo-pages');
+const HYBRID_FIXTURE = resolve(__dirname, '__fixtures__/mock-target-repo-hybrid');
 const DOC_PATH = resolve(__dirname, '../references/discovery-nextjs.md');
 const SKILL_PATH = resolve(__dirname, '../SKILL.md');
 
@@ -113,6 +115,35 @@ export function classifyFormSurface(pageFilePath) {
   return { mechanism: 'unknown' };
 }
 
+/** Detects the target project's router layout from its folder structure
+ *  (D-08) — see references/discovery-nextjs.md's router-layout heuristic.
+ *  Four named outcomes: `app`, `pages`, `both`, `unknown` — `unknown` is a
+ *  distinct, nameable outcome, never an empty success, since the protocol
+ *  has to stop and ask rather than emit an empty document. */
+export function detectRouterLayout(projectRoot) {
+  const appDir = join(projectRoot, 'app');
+  const pagesApiDir = join(projectRoot, 'pages', 'api');
+  const appHasSurface =
+    existsSync(appDir) &&
+    (walkFixture(projectRoot, { glob: API_ROUTE_GLOB }).length > 0 ||
+      walkFixture(projectRoot, { glob: PAGE_GLOB }).length > 0);
+  const pagesHasHandlers =
+    existsSync(pagesApiDir) && walkFixture(projectRoot, { glob: PAGES_API_GLOB }).length > 0;
+
+  if (appHasSurface && pagesHasHandlers) return { layout: 'both', roots: ['app', 'pages/api'] };
+  if (appHasSurface) return { layout: 'app', roots: ['app'] };
+  if (pagesHasHandlers) return { layout: 'pages', roots: ['pages/api'] };
+  return { layout: 'unknown', roots: [] };
+}
+
+/** Reads the Pages Router method-switch shape's handled verbs — not a
+ *  documented pattern constant in its own right (the Pages Router handler
+ *  shape itself is what PAGES_HANDLER_PATTERN identifies); this is a
+ *  test-only helper for reading what a matched handler actually does. */
+function extractHandledMethods(content) {
+  return [...content.matchAll(/req\.method\s*===\s*'(\w+)'/g)].map((m) => m[1]);
+}
+
 // --- Pattern doc agreement (anti-drift lock) -------------------------------
 
 describe('pattern doc agreement (anti-drift lock)', () => {
@@ -134,6 +165,17 @@ describe('pattern doc agreement (anti-drift lock)', () => {
     for (const dir of EXCLUDED_DIRS) {
       expect(doc).toContain(dir);
       expect(skill).toContain(dir);
+    }
+  });
+
+  it('states the Pages Router glob and handler pattern (added in Task 2)', () => {
+    expect(doc).toContain(PAGES_API_GLOB);
+    expect(doc).toContain(PAGES_HANDLER_PATTERN.source);
+  });
+
+  it('names every router-layout outcome detectRouterLayout can return', () => {
+    for (const layout of ['app', 'pages', 'both', 'unknown']) {
+      expect(doc).toContain(layout);
     }
   });
 });
@@ -222,6 +264,86 @@ describe('form mechanism tie-break — server-action wins when both signals are 
     writeFileSync(join(dir, 'actions.ts'), "'use server'\nexport async function bothAction() {}\n");
     const result = classifyFormSurface(join(dir, 'page.tsx'));
     expect(result.mechanism).toBe('server-action');
+  });
+});
+
+// --- Router layout detection (D-08) -----------------------------------------
+
+describe('router layout detection', () => {
+  it('detects app-only layout on the app-router fixture', () => {
+    const result = detectRouterLayout(APP_FIXTURE);
+    expect(result.layout).toBe('app');
+    expect(result.roots).toEqual(['app']);
+  });
+
+  it('detects pages-only layout on the pages-router fixture', () => {
+    const result = detectRouterLayout(PAGES_FIXTURE);
+    expect(result.layout).toBe('pages');
+    expect(result.roots).toEqual(['pages/api']);
+  });
+
+  it('detects both when a project has both layouts present', () => {
+    const result = detectRouterLayout(HYBRID_FIXTURE);
+    expect(result.layout).toBe('both');
+    expect(result.roots).toEqual(['app', 'pages/api']);
+  });
+
+  it('returns unknown with no roots for neither layout — a distinct nameable outcome', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'qa-agent-unknown-layout-'));
+    try {
+      const result = detectRouterLayout(dir);
+      expect(result.layout).toBe('unknown');
+      expect(result.roots).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not classify an app directory with no handler or page file as layout app', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'qa-agent-empty-app-'));
+    try {
+      mkdirSync(join(dir, 'app'), { recursive: true });
+      const result = detectRouterLayout(dir);
+      expect(result.layout).not.toBe('app');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// --- Pages Router handler shape ---------------------------------------------
+
+describe('Pages Router handler shape', () => {
+  it('finds exactly one pages API handler', () => {
+    const handlers = walkFixture(PAGES_FIXTURE, { glob: PAGES_API_GLOB });
+    expect(handlers).toEqual(['pages/api/legacy.ts']);
+  });
+
+  it('matches the default-export handler with PAGES_HANDLER_PATTERN', () => {
+    const content = readFileSync(join(PAGES_FIXTURE, 'pages/api/legacy.ts'), 'utf8');
+    expect(PAGES_HANDLER_PATTERN.test(content)).toBe(true);
+  });
+
+  it('finds nothing when the App Router verb pattern is applied to a Pages Router file', () => {
+    const content = readFileSync(join(PAGES_FIXTURE, 'pages/api/legacy.ts'), 'utf8');
+    const verbs = [...content.matchAll(VERB_EXPORT_PATTERN)];
+    expect(verbs).toHaveLength(0);
+  });
+
+  it("reads the method switch's handled verb set", () => {
+    const content = readFileSync(join(PAGES_FIXTURE, 'pages/api/legacy.ts'), 'utf8');
+    expect(extractHandledMethods(content)).toEqual(['GET', 'POST']);
+  });
+});
+
+// --- Hybrid layout handling --------------------------------------------------
+
+describe('hybrid layout handling', () => {
+  it('finds both the app-side page and the pages-side handler, neither empty', () => {
+    const pages = walkFixture(HYBRID_FIXTURE, { glob: PAGE_GLOB });
+    const handlers = walkFixture(HYBRID_FIXTURE, { glob: PAGES_API_GLOB });
+    expect(pages.length).toBeGreaterThan(0);
+    expect(handlers.length).toBeGreaterThan(0);
   });
 });
 

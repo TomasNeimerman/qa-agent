@@ -245,54 +245,76 @@ Never, in a browser run:
 
 This is the loop the orchestrator runs when asked to discover what to test
 from a target project's own code (DISC-01) — written to be concrete enough
-that two different sessions produce the same sequence. In this task it
-covers the API-route path only; plan 03-02 expands it to forms, Server
-Actions and router detection (D-08). Discovery reads only the target's
-source tree and writes nothing into it — the only artifact it produces is
-the test-cases document itself, per `## Case generation protocol` below.
+that two different sessions produce the same sequence. Discovery reads
+only the target's source tree and writes nothing into it — the only
+artifact it produces is the test-cases document itself, per `## Case
+generation protocol` below.
 
 1. **Decide whether this invocation is a full-project scan or a one-off
    scoped instruction**, and say which in chat before starting (D-07/D-12).
-   No qualifier beyond a project path means full-project scan; a
-   natural-language instruction naming a specific flow/route/table means a
-   scoped read of just what it names.
+   No qualifier beyond a project path means full-project scan of the whole
+   repository under the detected router-layout roots (step 3 below) — a
+   narrower scan is reached by naming a flow in the instruction, never by a
+   separate mode or a flag.
 2. **Resolve the target project root to an absolute path and pick one run
    id**, in the same `YYYY-MM-DD-HHmm-<slug>` form `## Run protocol` step 3
    already uses.
-3. **Glob the target's App Router API handlers** (`app/**/route.ts`) **and
-   its pages** (`app/**/page.tsx`), always excluding `node_modules`,
-   `.next`, `dist`, `build`, `out`, `coverage` and `.git` (D-07). Detection
-   detail for both globs — the exact patterns, the imperative-validation
-   shape, and the form-mechanism check below — is documented in
+3. **Detect the router layout** from the target's folder structure before
+   globbing anything (D-08): an `app` directory with at least one handler
+   or page file means App Router; its absence with a `pages/api` directory
+   present means Pages Router; both present means both trees are scanned;
+   neither present is `unknown` — a hard stop, not an empty result. On
+   `unknown`, report exactly what was looked for (`app/` and `pages/api/`)
+   and where (the resolved project root), and ask the developer to name
+   the route or folder to scan — never emit an empty test-cases document
+   for a layout that was simply unrecognised. Full heuristic detail:
+   `references/discovery-nextjs.md`.
+4. **Glob the target's API handlers and pages under the detected roots** —
+   `app/**/route.ts` and `app/**/page.tsx` for App Router,
+   `pages/api/**/*.ts` for Pages Router, both when the layout is `both` —
+   always excluding `node_modules`, `.next`, `dist`, `build`, `out`,
+   `coverage` and `.git` (D-07). Detection detail for every glob — the
+   exact patterns, the imperative-validation shape, the Pages Router
+   handler shape, and the form-mechanism check below — is documented in
    `references/discovery-nextjs.md`; read that file rather than
    re-deriving the rule from scratch, the same way `## Confirmation
    protocol` step 1 defers to `references/destructive-classification.md`.
-4. **Read each matched handler** and record, for every exported HTTP verb
-   function, each early-return validation check with its file, line,
+5. **Read each matched handler** and record, for every exported HTTP verb
+   function (App Router) or every branch of the method switch (Pages
+   Router), each early-return validation check with its file, line,
    literal message and status code. These apps validate imperatively, not
    with a schema library — finding no schema import is not evidence that a
    route is unvalidated; read the handler body itself before concluding
    that.
-5. **For each matched page, apply the form-mechanism check** from
+6. **For each matched page, apply the form-mechanism check** from
    `references/discovery-nextjs.md` before deciding anything about that
    surface: look in the same directory for a colocated `actions.ts`
    carrying the server directive first — if present the surface is
    server-action-backed; if absent and the page calls `fetch()` against an
    API path, the surface is client-fetch-backed and resolves to that
    handler.
-6. **Invoke `node <skill-dir>/scripts/discover-schema.mjs --project-root
+7. **Invoke `node <skill-dir>/scripts/discover-schema.mjs --project-root
    <target>`** through the Bash tool and read its JSON. Never read
    migration SQL by eye to decide what a constraint says — a policy
    predicate (`WITH CHECK`) and a data constraint (`CHECK`) share the same
    substring, and this script is the only tier permitted to make that call
    (03-RESEARCH.md Pattern 3).
-7. **Name each discovered surface** using the convention `## Case
+8. **Name each discovered surface** using the convention `## Case
    generation protocol` below groups by: an HTTP method and path for an
    API surface (e.g. `POST /api/categorias`), and a route path plus
    mechanism for a UI surface (e.g. `UI /login (Server Action)`).
-8. **Hand everything recorded** — the route handlers' imperative checks,
-   the classified form surfaces, and `discover-schema.mjs`'s JSON — to
-   `## Case generation protocol` below.
+9. **Stay inside the resolved project root for the whole scan.** Never
+   follow a symlink that points outside it, and never open a file outside
+   `references/discovery-nextjs.md`'s documented allowlist even when it
+   looks relevant (T-03-07, T-03-09).
+10. **Record what was looked at.** The detected router layout goes on the
+    generated document's `Router` metadata line; the globs actually
+    scanned and the exclusions applied go on its `Alcance` line, per
+    `references/test-case-format.md`. A reader must be able to tell what
+    was looked at from what was found.
+11. **Hand everything recorded** — the route handlers' imperative checks,
+    the classified form surfaces, and `discover-schema.mjs`'s JSON — to
+    `## Case generation protocol` below.
 
 ## Case generation protocol
 
