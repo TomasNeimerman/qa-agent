@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 3
 current_phase_name: Dual Discovery & Test-Case Generation
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-08-24T13:39:38.196Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-08-24T14:07:11.648Z"
 last_activity: 2026-08-24
 last_activity_desc: Phase 3 execution started
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 11
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 3 (Dual Discovery & Test-Case Generation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-08-24 — Phase 3 execution started
 
-Progress: [████████░░] 82%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [████████░░] 82%
 | Phase 1 P3 | 28min | 2 tasks | 3 files |
 | Phase 01 P04 | 27min | 3 tasks | 5 files |
 | Phase 03 P02 | 20min | 2 tasks | 13 files |
+| Phase 3 P3 | 48min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 1] 01-04: preflight() runs once per CLI invocation ahead of every dispatch, which added one HEAD request to the mock's request log on every real dispatch — two exact-count assertions in destructive.test.mjs (01-02's file) were updated to account for it, documented as a deviation
 - [Phase ?]: 03-02: Form-mechanism precedence pinned as server-action-wins when both a colocated actions.ts and a fetch() call are present in the same page — matches what the browser actually submits through
 - [Phase ?]: 03-02: Pages Router branch of D-08 built and fixture-validated only — RESEARCH confirmed no pages/api directory exists in any of DATAX-web/dotax/franquix, flagged as an honesty note in references/discovery-nextjs.md
+- [Phase ?]: 03-03: Scoped Discovery protocol branch inserted as step 2 (immediately after the full-scan-vs-scoped decision), self-contained and cross-referencing the full-scan branch's steps rather than duplicating them
+- [Phase ?]: 03-03: Real-repo validation (Task 3) found and fixed an off-by-one CREATE TABLE column citation bug in discover-schema.mjs — every column after the first in a multi-line CREATE TABLE cited the line above its real definition
+- [Phase ?]: 03-03: STATE.md App-Router-vs-Pages-Router research flag closed — franquix and dotax both detect as App Router only, live, confirming 03-01-RESEARCH.md's prior finding
 
 ### Pending Todos
 
@@ -107,6 +111,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-24T13:39:38.183Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-08-24T14:07:11.633Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
