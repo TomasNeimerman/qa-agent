@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation, Guardrails & API Testing** - Installable skill with safety guardrails and a complete direct-HTTP API test loop (explore → test → report) (completed 2026-08-11)
 - [x] **Phase 2: Browser Execution Engine** - Natural-language-directed browser automation with test-account auth and UI↔API session reuse (completed 2026-08-20)
-- [ ] **Phase 3: Dual Discovery & Test-Case Generation** - Code-aware and natural-language discovery that produces documented, executable test cases
+- [x] **Phase 3: Dual Discovery & Test-Case Generation** - Code-aware and natural-language discovery that produces documented, executable test cases (completed 2026-08-24)
 - [ ] **Phase 4: Edge-Case & Input Validation Quality** - Systematic boundary, negative, and permission edge-case coverage grounded in discovered constraints
 - [ ] **Phase 5: Smoke-Test Mode & Cross-Project Distribution** - Fast post-deploy smoke checks and unmodified portability across the team's projects
 
@@ -81,15 +81,15 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Tracer: fixture project → deterministic Supabase constraint extraction → one conforming test-cases.md, plus the document format contract (DISC-01, DISC-02)
+- [x] 03-01-PLAN.md — Tracer: fixture project → deterministic Supabase constraint extraction → one conforming test-cases.md, plus the document format contract (DISC-01, DISC-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — Route/form/Server-Action discovery rules and automatic App Router vs Pages Router detection (DISC-01, D-07, D-08)
+- [x] 03-02-PLAN.md — Route/form/Server-Action discovery rules and automatic App Router vs Pages Router detection (DISC-01, D-07, D-08)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-03-PLAN.md — Scoped natural-language generation, anchored case lookup, and the run-by-case-ID handoff to the Phase 1/2 executors (DISC-02, DISC-03)
+- [x] 03-03-PLAN.md — Scoped natural-language generation, anchored case lookup, and the run-by-case-ID handoff to the Phase 1/2 executors (DISC-02, DISC-03)
 
 ### Phase 4: Edge-Case & Input Validation Quality
 
@@ -127,7 +127,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|-----------------|--------|-----------|
 | 1. Foundation, Guardrails & API Testing | 4/4 | Complete    | 2026-08-11 |
 | 2. Browser Execution Engine | 4/4 | Complete    | 2026-08-20 |
-| 3. Dual Discovery & Test-Case Generation | 0/3 | Planned     | - |
+| 3. Dual Discovery & Test-Case Generation | 3/3 | Complete    | 2026-08-24 |
 | 4. Edge-Case & Input Validation Quality | 0/TBD | Not started | - |
 | 5. Smoke-Test Mode & Cross-Project Distribution | 0/TBD | Not started | - |
 
