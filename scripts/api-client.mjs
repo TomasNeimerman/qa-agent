@@ -7,7 +7,8 @@
 // CLI exit codes:
 //   0 = case recorded (a passed case, a failed case, or a declined/blocked case
 //       via --declined — all are a successful run of this script)
-//   2 = ConfigError (QA_AGENT_BASE_URL / QA_AGENT_TOKEN not configured)
+//   2 = ConfigError (QA_AGENT_BASE_URL / QA_AGENT_TOKEN / QA_AGENT_TOKEN_SECONDARY
+//       not configured, or --secondary combined with --storage-state)
 //   3 = confirmation required, nothing sent (destructive method without
 //       --confirmed — see requiresConfirmation in scripts/destructive.mjs)
 //   4 = target unreachable / request-level failure (including a failed
@@ -24,11 +25,13 @@
 // QA_AGENT_TOKEN bearer token, a --storage-state path from a prior UI login,
 // or both — see API-03), loud failure (exit 2) if the base URL is missing or
 // no auth mechanism at all is present; storage-state path resolution happens
-// inside this same step, so it still sits behind the confirmation gate;
-// 4) preflight — a single reachability probe against the resolved base URL;
-// 5) dispatch — runCase actually sends the request. Widening the method set
-// or adding new checks later must preserve this order, not add a bypass
-// around any earlier step.
+// inside this same step, so it still sits behind the confirmation gate; which
+// token variable is read (QA_AGENT_TOKEN or QA_AGENT_TOKEN_SECONDARY) is
+// selected by the boolean --secondary flag, which carries no value itself
+// (D-01); 4) preflight — a single reachability probe against the resolved
+// base URL; 5) dispatch — runCase actually sends the request. Widening the
+// method set or adding new checks later must preserve this order, not add a
+// bypass around any earlier step.
 
 import { basename, dirname, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -82,8 +85,15 @@ export function redactHeaders(headers) {
  * before reading process.env, per D-09 / RESEARCH Standard Stack (dotenv).
  * Throws ConfigError with a specific, actionable message when either value is
  * absent — this is D-09's "fail loudly, never send an empty Authorization header".
+ *
+ * `useSecondary` (default false) selects which bearer-token env var is read
+ * — QA_AGENT_TOKEN_SECONDARY when true, QA_AGENT_TOKEN when false — so a
+ * permission case dispatched as the second, lower-privilege test user can
+ * never silently run as the primary one (D-01). The variable is read here,
+ * inside this function's own process.env access, exactly as QA_AGENT_TOKEN
+ * already is: the caller only ever passes a boolean, never a token value.
  */
-export function readConfig({ baseUrlArg, projectRoot, storageStatePath } = {}) {
+export function readConfig({ baseUrlArg, projectRoot, storageStatePath, useSecondary = false } = {}) {
   const root = projectRoot ?? process.cwd();
 
   for (const filename of ['.env.local', '.env']) {
@@ -100,6 +110,21 @@ export function readConfig({ baseUrlArg, projectRoot, storageStatePath } = {}) {
     );
   }
 
+  // The two-identities contradiction is named before the storage-state path
+  // is even resolved — deliberately placed ahead of the existence check
+  // below (D-01). A storage state is the primary test user's own session,
+  // so combining it with --secondary asks the script to be two identities
+  // at once; that is a fact about the flags, not about whether the path
+  // resolves, so a mistyped path must never be named first and answer a
+  // question the caller did not ask.
+  if (useSecondary && storageStatePath) {
+    throw new ConfigError(
+      '--secondary and --storage-state cannot both be given — a storage state is the ' +
+        "primary test user's own session, so the two flags name different identities. " +
+        'Pass one or the other, not both.'
+    );
+  }
+
   // A mistyped --storage-state path must never silently degrade into an
   // unauthenticated request (RESEARCH Pitfall 4, T-02-05) — checked before
   // the auth-mechanism check below so a typo is named specifically, even
@@ -110,7 +135,25 @@ export function readConfig({ baseUrlArg, projectRoot, storageStatePath } = {}) {
     );
   }
 
-  const token = process.env.QA_AGENT_TOKEN;
+  const token = process.env[useSecondary ? 'QA_AGENT_TOKEN_SECONDARY' : 'QA_AGENT_TOKEN'];
+
+  if (useSecondary) {
+    // The primary credential is never substituted for a missing secondary
+    // one — substituting it would run a permission case as the wrong user
+    // and report the result as if it came from the right one (D-01). A
+    // storage-state path never satisfies this branch: the two-identities
+    // refusal above already guarantees that by construction.
+    if (!token) {
+      throw new ConfigError(
+        'QA_AGENT_TOKEN_SECONDARY is not configured — export it in the shell that launched ' +
+          "Claude Code (or set it in the target project's .env.local) before passing " +
+          '--secondary. The primary QA_AGENT_TOKEN credential is never substituted for a ' +
+          'missing secondary one.'
+      );
+    }
+    return { baseUrl, token, storageStatePath, useSecondary };
+  }
+
   // A Phase 2 UI-driven run has no QA_AGENT_TOKEN at all but does have a
   // valid storageStatePath from a prior UI login (API-03) — that is not a
   // missing-auth condition. Throw only when neither mechanism is present.
@@ -125,7 +168,7 @@ export function readConfig({ baseUrlArg, projectRoot, storageStatePath } = {}) {
     );
   }
 
-  return { baseUrl, token, storageStatePath };
+  return { baseUrl, token, storageStatePath, useSecondary };
 }
 
 const NON_PROD_KEYWORDS = ['staging', 'stage', 'dev', 'test', 'qa', 'preview', 'sandbox'];
@@ -464,6 +507,7 @@ async function main() {
   const readOnlyIntent = Boolean(args['read-only-intent']);
   const blockedReasonArg = typeof args['blocked-reason'] === 'string' ? args['blocked-reason'] : undefined;
   const allowNonLocal = Boolean(args['allow-non-local']);
+  const useSecondary = Boolean(args.secondary);
   const baseUrlForPreview = args['base-url'] ?? process.env.QA_AGENT_BASE_URL;
   const storageStateArg =
     typeof args['storage-state'] === 'string' ? resolve(args['storage-state']) : undefined;
@@ -531,12 +575,16 @@ async function main() {
     return;
   }
 
+  // Do not move this call: the documented startup check order places the
+  // confirmation gate and the production-target check before any credential
+  // read, and --secondary must not become a path around either.
   let config;
   try {
     config = readConfig({
       baseUrlArg: args['base-url'],
       projectRoot,
       storageStatePath: storageStateArg,
+      useSecondary,
     });
   } catch (err) {
     if (err instanceof ConfigError) {
