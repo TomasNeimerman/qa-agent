@@ -66,6 +66,134 @@ that the endpoint is unvalidated. The second phrasing is a claim about the
 application; discovery has no standing to make it. It is only entitled to
 report the limits of what it looked for.
 
+## Permission / role-guard detection
+
+Permission and role guards inside a route handler take at least two shapes
+across the target repos: an inline `NextResponse.json` 403 and a
+project-local response helper (`err(message, status)` or similar) that
+wraps the same kind of guard. A detector keyed on `## Validation
+detection`'s response-shape regex finds the first and silently misses the
+second — the exact silent-zero failure mode Phase 3's no-Zod pitfall
+already cost this project once. The primary detection path therefore greps
+the **role comparison itself**, independent of how the response that
+follows it is constructed:
+
+```
+\.rol\s*[!=]==\s*['"]\w+['"]
+```
+
+This matches a `.rol` property compared with a strict equality or
+inequality operator against a single- or double-quoted word literal — for
+example `perfil.rol !== 'admin'` or `caller.rol === "admin"`. The
+comparison is the anchor because it is structurally identical regardless
+of the response wrapper; the response call after it is not part of the
+match.
+
+A secondary, corroborating grep runs near the matched comparison (the
+same line or the handful of lines immediately after it) for an
+authorization-status signal:
+
+```
+\b40[13]\b|no autorizado|solo\s+\S+
+```
+
+This catches a `status` of 401 or 403 (inline literal or a positional
+argument to a helper call), a Spanish "no autorizado" message, or a
+"solo"-plus-role phrase such as "Solo el administrador" / "Solo un
+administrador". Finding this signal near the role comparison corroborates
+that the branch is a permission guard rather than an unrelated `.rol`
+read; it is never a substitute for reading the branch.
+
+**The matched lines must be Read before anything is concluded.** The
+literal message and status code are quoted from the file, never guessed —
+the same instruction `## Validation detection`'s worked example and
+`## Tie-breaker` already give for the no-schema case.
+
+**Worked example, inline shape** —
+`scripts/__fixtures__/mock-target-repo/app/api/categorias/route.ts`:
+
+```ts
+if (perfil.rol !== 'admin') {
+  return NextResponse.json(
+    { error: 'Solo el administrador puede crear categorias' },
+    { status: 403 }
+  );
+}
+```
+
+The role comparison (`perfil.rol !== 'admin'`) matches the primary
+pattern; the literal message "Solo el administrador puede crear
+categorias" and status 403, quoted directly from the file, ground the
+generated permission case.
+
+**Worked example, helper-wrapped shape** — grounded in the dotax handlers
+verified in `.planning/phases/04-edge-case-input-validation-quality/04-RESEARCH.md`
+(Pattern 4), a handler guard can return a project-local helper instead of
+an inline `NextResponse.json` call, for example:
+
+```ts
+if (!caller || caller.rol !== 'admin') {
+  return err('No autorizado. Solo un administrador puede crear usuarios.', 403);
+}
+```
+
+The role comparison still matches the primary pattern even though the
+response is a bare `err(message, status)` call — `## Validation
+detection`'s response-shape regex would find nothing here. The helper's
+own definition (wherever `err` is declared in the project) must be read to
+confirm which status code it actually sends before that status is quoted
+in a generated case; do not assume the second argument is always the
+status without checking the helper's signature.
+
+**The rule that follows from finding nothing.** No match for the role-guard
+pattern means **no role guard was detected by these named patterns** —
+never that the endpoint has no access control. Discovery has no standing
+to claim the second; it can only report the limits of what it looked for.
+RLS presence or absence (a separate detection path, parsed by
+`discover-schema.mjs`) is a different signal entirely — an empty result
+from one path says nothing about the other, and neither should be read as
+"this endpoint is unprotected."
+
+## Required-field and format detection
+
+This section states what this project is entitled to treat as a
+detectable signal for DISC-04's three subcategories — required-field
+omission, invalid format, and boundary value (boundary value's numeric
+generation rule lives with `discover-schema.mjs`'s `parseCheckBounds`, not
+here).
+
+**Required field.** A field is a detectable required field when either is
+true: the handler itself rejects the request when the field is absent (the
+existing imperative-error path in `## Validation detection`), or the
+migration declares the column `NOT NULL`. Either signal alone is enough to
+generate a required-field-omission case; neither signal existing means no
+such case is generated, not that the field is optional.
+
+**Invalid format.** An invalid-format signal is limited to shapes readable
+in code, without inferring intent from a field's name:
+
+- an email validator (e.g. a regex or library call recognizably checking
+  email shape),
+- a general-purpose regex validator applied to the field,
+- a SQL `CHECK` constraint carrying a pattern (not a numeric bound —
+  those feed the boundary-value path instead), or
+- an allowed-value set, reported as `allowedValues` on the constraint
+  record `discover-schema.mjs`'s `discoverSchema()` returns (an inline
+  `CHECK (col IN (...))` value list, or a cross-referenced `CREATE TYPE
+  ... AS ENUM`).
+
+**Domain-specific formats are explicitly out of scope here.** CUIT/CUIL
+check-digit validation and Argentine phone number shapes are not detected
+or generated by this rubric — that work is tracked as `DOM-01` in
+`.planning/REQUIREMENTS.md`'s v2 section, so a reader does not mistake the
+omission for an oversight.
+
+**The rule that follows from finding nothing.** An undetected format is an
+undetected format, never a field without a format requirement. The same
+discipline `## Validation detection`'s closing rule states for validation
+generally applies here: absence of a match is a statement about what the
+rubric looked for, not about the application's real behavior.
+
 ## Form mechanism detection
 
 Before assuming a form posts JSON to an `app/**/route.ts` handler, run
