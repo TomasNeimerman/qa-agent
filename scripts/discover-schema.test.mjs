@@ -20,6 +20,7 @@ import {
   discoverSchema,
   extractConstraints,
   extractEnumTypes,
+  extractPolicies,
   listMigrations,
   parseCheckBounds,
   parseCheckEnum,
@@ -166,12 +167,12 @@ describe('extractConstraints — policy disambiguation (load-bearing)', () => {
     CREATE POLICY p2 ON t FOR UPDATE WITH CHECK (rol() = 'owner');
   `;
 
-  it('yields exactly one constraint with a non-null check, and withCheckSkipped 2', () => {
+  it('yields exactly one constraint with a non-null check, and policyWithCheckCount 2', () => {
     const records = extractConstraints(sql, { file: 'x.sql' });
     const checked = records.filter((r) => r.check);
     expect(checked).toHaveLength(1);
     expect(checked[0].check).toBe('a > 0');
-    expect(records.withCheckSkipped).toBe(2);
+    expect(records.policyWithCheckCount).toBe(2);
   });
 
   it('a multi-line WITH CHECK predicate still contributes zero constraints', () => {
@@ -185,7 +186,7 @@ describe('extractConstraints — policy disambiguation (load-bearing)', () => {
     `;
     const records = extractConstraints(multiline, { file: 'x.sql' });
     expect(records).toHaveLength(0);
-    expect(records.withCheckSkipped).toBe(1);
+    expect(records.policyWithCheckCount).toBe(1);
   });
 
   it('no constraint check expression ever equals or contains a policy predicate', () => {
@@ -195,6 +196,100 @@ describe('extractConstraints — policy disambiguation (load-bearing)', () => {
         expect(r.check).not.toContain('rol()');
       }
     }
+  });
+});
+
+describe('extractPolicies', () => {
+  it('a FOR INSERT policy with WITH CHECK yields command, no role, no using', () => {
+    const records = extractPolicies(
+      "CREATE POLICY p ON t FOR INSERT WITH CHECK (rol() = 'admin');",
+      { file: 'x.sql' }
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      policyName: 'p',
+      table: 't',
+      command: 'INSERT',
+      role: null,
+      using: null,
+      withCheck: "rol() = 'admin'",
+    });
+  });
+
+  it('a policy with no FOR clause yields command ALL', () => {
+    const records = extractPolicies('CREATE POLICY p ON t WITH CHECK (true);', { file: 'x.sql' });
+    expect(records[0].command).toBe('ALL');
+  });
+
+  it('a FOR SELECT policy with USING and no WITH CHECK yields using set, withCheck null', () => {
+    const records = extractPolicies(
+      "CREATE POLICY p ON t FOR SELECT USING (id = auth.uid());",
+      { file: 'x.sql' }
+    );
+    expect(records[0].using).toBe('id = auth.uid()');
+    expect(records[0].withCheck).toBeNull();
+  });
+
+  it('a FOR ALL policy with both clauses yields both, full balanced-paren bodies with nested parens and AND', () => {
+    const sql = `
+      CREATE POLICY usuarios_admin_write ON usuarios FOR ALL
+        USING (rol_actual() = 'admin' AND tenant_id = tenant_actual())
+        WITH CHECK (rol_actual() = 'admin' AND tenant_id = tenant_actual());
+    `;
+    const records = extractPolicies(sql, { file: 'x.sql' });
+    expect(records).toHaveLength(1);
+    expect(records[0].using).toBe("rol_actual() = 'admin' AND tenant_id = tenant_actual()");
+    expect(records[0].withCheck).toBe("rol_actual() = 'admin' AND tenant_id = tenant_actual()");
+  });
+
+  it('a TO authenticated clause yields role authenticated', () => {
+    const records = extractPolicies('CREATE POLICY p ON t TO authenticated USING (true);', {
+      file: 'x.sql',
+    });
+    expect(records[0].role).toBe('authenticated');
+  });
+
+  it('a TO a, b list yields both roles without throwing', () => {
+    const records = extractPolicies('CREATE POLICY p ON t TO a, b USING (true);', {
+      file: 'x.sql',
+    });
+    expect(records[0].role).toContain('a');
+    expect(records[0].role).toContain('b');
+  });
+
+  it('absence of a TO clause yields role null', () => {
+    const records = extractPolicies('CREATE POLICY p ON t USING (true);', { file: 'x.sql' });
+    expect(records[0].role).toBeNull();
+  });
+
+  it('AS PERMISSIVE before the FOR clause does not prevent a record being produced', () => {
+    const records = extractPolicies(
+      'CREATE POLICY p ON t AS PERMISSIVE FOR ALL USING (true);',
+      { file: 'x.sql' }
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0].command).toBe('ALL');
+  });
+
+  it('AS RESTRICTIVE before the FOR clause does not prevent a record being produced', () => {
+    const records = extractPolicies(
+      'CREATE POLICY p ON t AS RESTRICTIVE FOR SELECT USING (true);',
+      { file: 'x.sql' }
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0].command).toBe('SELECT');
+  });
+
+  it('a CREATE POLICY inside a SQL comment produces no record', () => {
+    const sql = "-- CREATE POLICY p ON t WITH CHECK (true);\nCREATE TABLE t (a int);\n";
+    const records = extractPolicies(sql, { file: 'x.sql' });
+    expect(records).toHaveLength(0);
+  });
+
+  it("each record's source carries the given file name and the statement's 1-based first-character line", () => {
+    const sql = '\n\nCREATE POLICY p ON t WITH CHECK (true);\n';
+    const records = extractPolicies(sql, { file: 'migrations/0001_x.sql' });
+    expect(records[0].source).toEqual({ file: 'migrations/0001_x.sql', line: 3 });
   });
 });
 

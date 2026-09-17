@@ -550,25 +550,113 @@ function splitStatements(text) {
 }
 
 /**
+ * Returns every `CREATE POLICY` statement in `sql` as a structured record
+ * `{ policyName, table, command, role, using, withCheck, source: { file, line } }`.
+ * Built on the module's own existing machinery — `stripSqlComments` first
+ * (so a `CREATE POLICY`-like token inside a comment never produces a
+ * record, mirroring `extractConstraints`'s own comment-handling), then
+ * `splitStatements`, then `countNewlines` for the line citation, then
+ * `extractBalancedParens` for each clause body (`USING (...)`/`WITH CHECK
+ * (...)` may themselves contain nested parens and `AND`/`OR` operators, so
+ * a non-greedy regex cannot be trusted to find the right closing paren —
+ * the exact reason `extractBalancedParens` exists in the first place).
+ *
+ * This is not a general SQL grammar parser — the observed grammar subset is
+ * exactly `CREATE POLICY <name> ON <table> [AS PERMISSIVE|RESTRICTIVE]
+ * [FOR ALL|SELECT|INSERT|UPDATE|DELETE] [TO <role>[, <role>...]]
+ * [USING (...)] [WITH CHECK (...)]`, and that is the whole surface this
+ * function models. `command` defaults to the literal `ALL` when the `FOR`
+ * clause is absent. `role` is `null` when the `TO` clause is absent,
+ * otherwise the role name(s) found, parsed leniently (a multi-role
+ * `TO a, b` list is joined, not modelled as a typed list) — a policy form
+ * this does not fully model must still yield a record rather than throw,
+ * because a target repo using an unmodelled form is a coverage gap, not a
+ * crash (04-RESEARCH.md Assumption A1).
+ *
+ * The `WITH CHECK` predicate this captures is a policy predicate, and it is
+ * still never a data constraint — `extractConstraints`'s own `CREATE
+ * POLICY` branch below keeps refusing to push a record for it (T-04-01):
+ * this function and that one see the same statement text, but only this
+ * one is allowed to turn it into structured output.
+ */
+export function extractPolicies(sql, { file }) {
+  const stripped = stripSqlComments(sql);
+  const statements = splitStatements(stripped);
+  const records = [];
+
+  for (const stmt of statements) {
+    const leadingWs = stmt.text.match(/^\s*/)[0].length;
+    const trimmedText = stmt.text.slice(leadingWs);
+    if (!trimmedText.trim()) continue;
+    if (!/^CREATE\s+POLICY\b/i.test(trimmedText)) continue;
+
+    const headerMatch = trimmedText.match(/^CREATE\s+POLICY\s+(\w+)\s+ON\s+(\w+)/i);
+    if (!headerMatch) continue;
+
+    const absStart = stmt.startIndex + leadingWs;
+    const line = 1 + countNewlines(stripped.slice(0, absStart));
+
+    const policyName = headerMatch[1];
+    const table = headerMatch[2];
+
+    const commandMatch = trimmedText.match(/\bFOR\s+(ALL|SELECT|INSERT|UPDATE|DELETE)\b/i);
+    const command = commandMatch ? commandMatch[1].toUpperCase() : 'ALL';
+
+    let role = null;
+    const toMatch = trimmedText.match(/\bTO\s+([\s\S]*?)(?=\bUSING\s*\(|\bWITH\s+CHECK\s*\(|;|$)/i);
+    if (toMatch) {
+      const roles = toMatch[1]
+        .replace(/;\s*$/, '')
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean);
+      role = roles.length > 0 ? roles.join(', ') : null;
+    }
+
+    let using = null;
+    const usingMatch = trimmedText.match(/\bUSING\s*\(/i);
+    if (usingMatch) {
+      const openParen = trimmedText.indexOf('(', usingMatch.index);
+      using = extractBalancedParens(trimmedText, openParen);
+    }
+
+    let withCheck = null;
+    const withCheckMatch = trimmedText.match(/\bWITH\s+CHECK\s*\(/i);
+    if (withCheckMatch) {
+      const openParen = trimmedText.indexOf('(', withCheckMatch.index);
+      withCheck = extractBalancedParens(trimmedText, openParen);
+    }
+
+    records.push({ policyName, table, command, role, using, withCheck, source: { file, line } });
+  }
+
+  return records;
+}
+
+/**
  * Scans `sql` statement by statement and returns a flat array of constraint
  * records (`table`, `column`, `type`, `notNull`, `unique`, `primaryKey`,
  * `check`, `enumValues`, `references`, `origin`, `source`). The returned
- * array also carries a non-index `withCheckSkipped` property counting every
- * `CHECK (` occurrence recognised and deliberately excluded because it sat
- * inside a `CREATE POLICY` statement (an RLS predicate, never a data rule) —
- * deliberately excluded is a different fact from never seen, and the reader
- * needs to be able to tell them apart. The disambiguation is this explicit,
- * named statement-context check, never a loose regex whose match implicitly
- * decides behavior: a `CHECK (` counts as a data constraint only when its
- * enclosing statement is a `CREATE TABLE` or `ALTER TABLE`, never a
- * `CREATE POLICY`.
+ * array also carries a non-index `policyWithCheckCount` property — an
+ * informational count of every `WITH CHECK (` occurrence found inside a
+ * `CREATE POLICY` statement, cross-checkable against `extractPolicies`'s
+ * own `policies` array. The previous counter name and doc comment meant
+ * "deliberately excluded" back when `CREATE POLICY` content was discarded
+ * entirely; now that `extractPolicies` captures that content as structured
+ * records, nothing here is skipped anymore — the field carries a new name
+ * to match what it now means, an informational cross-check count, not a
+ * record of something excluded. The disambiguation this function itself
+ * enforces is unchanged: a `CHECK (` counts as a data constraint only when
+ * its enclosing statement is a `CREATE TABLE` or `ALTER TABLE`, never a
+ * `CREATE POLICY` — that branch below still refuses to push a constraint
+ * record for policy content, exactly as before (T-04-01).
  */
 export function extractConstraints(sql, { file }) {
   const stripped = stripSqlComments(sql);
   const statements = splitStatements(stripped);
 
   const records = [];
-  let withCheckSkipped = 0;
+  let policyWithCheckCount = 0;
 
   for (const stmt of statements) {
     const leadingWs = stmt.text.match(/^\s*/)[0].length;
@@ -579,8 +667,8 @@ export function extractConstraints(sql, { file }) {
     const baseLine = 1 + countNewlines(stripped.slice(0, absStart));
 
     if (/^CREATE\s+POLICY\b/i.test(trimmedText)) {
-      const matches = trimmedText.match(/CHECK\s*\(/gi);
-      withCheckSkipped += matches ? matches.length : 0;
+      const matches = trimmedText.match(/WITH\s+CHECK\s*\(/gi);
+      policyWithCheckCount += matches ? matches.length : 0;
       continue;
     }
 
@@ -597,7 +685,7 @@ export function extractConstraints(sql, { file }) {
     // remnants, ...) carries no column/table constraint this module models.
   }
 
-  records.withCheckSkipped = withCheckSkipped;
+  records.policyWithCheckCount = policyWithCheckCount;
   return records;
 }
 
@@ -606,12 +694,15 @@ export function extractConstraints(sql, { file }) {
  * `resolveWithinRoot`, and every individual file open routed through it
  * too, so a symlink inside the directory cannot escape the root either),
  * reads each `.sql` file (skipping and reporting any file over
- * `MAX_MIGRATION_BYTES` without ever loading it), parses constraints and
- * enum declarations, cross-references every column whose `type` names a
- * declared enum, and returns
- * `{ projectRoot, migrationsDir, files, skipped, enums, constraints, withCheckSkipped }`.
- * This function never writes anything — its whole surface is read, parse,
- * return (T-03-03, ASVS V1).
+ * `MAX_MIGRATION_BYTES` without ever loading it), parses constraints, enum
+ * declarations and RLS policy statements, cross-references every column
+ * whose `type` names a declared enum, and returns
+ * `{ projectRoot, migrationsDir, files, skipped, enums, constraints, policies, policyWithCheckCount }`.
+ * `policies` is always present, possibly an empty array for a project with
+ * no `CREATE POLICY` statements — an empty array is a valid, honest result,
+ * never treated as a discovery failure (D-03, T-04-10). This function never
+ * writes anything — its whole surface is read, parse, return (T-03-03,
+ * ASVS V1).
  */
 export function discoverSchema({ projectRoot, migrationsDir = 'supabase/migrations' } = {}) {
   if (!projectRoot) {
@@ -632,7 +723,8 @@ export function discoverSchema({ projectRoot, migrationsDir = 'supabase/migratio
   const skipped = [];
   const enums = [];
   const constraints = [];
-  let withCheckSkipped = 0;
+  const policies = [];
+  let policyWithCheckCount = 0;
 
   for (const filename of fileNames) {
     const filePath = resolveWithinRoot(rootReal, join(migrationsAbs, filename));
@@ -669,8 +761,10 @@ export function discoverSchema({ projectRoot, migrationsDir = 'supabase/migratio
     }
 
     const fileConstraints = extractConstraints(sql, { file: filename });
-    withCheckSkipped += fileConstraints.withCheckSkipped ?? 0;
+    policyWithCheckCount += fileConstraints.policyWithCheckCount ?? 0;
     constraints.push(...fileConstraints);
+
+    policies.push(...extractPolicies(sql, { file: filename }));
   }
 
   const enumMap = new Map(enums.map((e) => [e.name, e.values]));
@@ -694,7 +788,8 @@ export function discoverSchema({ projectRoot, migrationsDir = 'supabase/migratio
     skipped,
     enums,
     constraints,
-    withCheckSkipped,
+    policies,
+    policyWithCheckCount,
   };
 }
 
