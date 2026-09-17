@@ -176,6 +176,53 @@ invented constraint this document's opening invariant forbids.
   automatically correct behavior, and labeling it `negativo` would overstate
   that authority.
 
+### Subcategoría de caso (D-08)
+
+A case produced by the systematic input-validation pass (DISC-04) names its
+subcategory in the case title, in human-readable Spanish, so a reader can
+scan the document without opening every case. No sixth bullet is added to
+the five-field schema above to carry it — the subcategory lives in the
+title text alone.
+
+This convention covers three DISC-04 subcategories:
+
+- **campo requerido faltante** — the case omits a field the discovery pass
+  found to be required. Worked title: `### case-4 — Falta el campo nombre
+  (campo requerido faltante)`.
+- **formato inválido** — the case sends a value that violates a discovered
+  format constraint (a Zod `.email()`/`.regex(...)`, or an SQL `CHECK` with
+  a pattern). Worked title: `### case-6 — Email con formato inválido
+  (formato inválido)`.
+- **valor límite** — the case sends a value at or just past a discovered
+  numeric/length boundary. The four `dia_cierre` titles in
+  `scripts/__fixtures__/sample-test-cases.md` (`dia_cierre limite inferior
+  menos 1`, `dia_cierre limite inferior exacto`, `dia_cierre limite
+  superior exacto`, `dia_cierre limite superior mas 1`) are the canonical
+  example of this form.
+
+The exact phrasing — word order, whether the subcategory is parenthesised
+or inline, accents — is the generator's own judgment, constrained only by
+naming the subcategory and the field the case exercises.
+
+### Regla de límites (D-09/D-10)
+
+- A field whose discovered constraint resolves **two bounds** (both `min`
+  and `max` non-null) gets exactly **four** boundary cases, in `min-1`,
+  `min`, `max`, `max+1` order.
+- A field whose discovered constraint resolves **one bound** (only `min` or
+  only `max` non-null) gets **only that side's pair** — never an invented
+  opposite bound.
+- A field with **no discovered constraint** gets **no** boundary case at
+  all. A required field with no numeric/length constraint still gets its
+  required-field-omission case (per the campo requerido faltante
+  subcategory above) — the absence of a boundary is not the absence of the
+  required-field check.
+
+Every boundary case carries the file-and-line citation of the constraint it
+came from, under the citation rule above — a boundary value with no cited
+source is the invented constraint this document's opening invariant already
+forbids.
+
 ### Dispatch-flag prohibition
 
 A case document is written at generation time and read back later, at

@@ -173,6 +173,57 @@ export function extractEnumTypes(sql) {
   return results;
 }
 
+/**
+ * Recognises a numeric bound inside a `CHECK` expression string and returns
+ * `{ min, max }`, with either side `null` when only one side resolved, or
+ * `null` when neither resolved. This is D-10's "never invent a boundary"
+ * discipline applied one level deeper than "no CHECK found at all": an
+ * unrecognised expression shape (a value-set `IN (...)`, a multi-column
+ * business rule like `num_nonnulls(a, b) = 1`, ...) is a different fact from
+ * no constraint at all, and reports the same `null` either way rather than
+ * guessing at a shape it doesn't recognise.
+ *
+ * Recognised shapes, tried in this precedence order — a two-sided
+ * `BETWEEN <a> AND <b>` first (so a `BETWEEN` clause is never also read by
+ * the comparison branches below), then the comparison operators `>=`, `<=`,
+ * `>`, `<`. `>=`/`<=` yield their literal operand; a bare `>`/`<` is an
+ * exclusive bound, so it yields the adjacent inclusive integer (operand + 1
+ * / operand - 1) — an exclusive bound is not the same fact as an inclusive
+ * one, and reporting it pre-adjusted lets the four-case boundary rule
+ * (min-1/min/max/max+1) consume `bounds` directly without knowing whether
+ * the original expression was inclusive or exclusive. The bare `>`/`<`
+ * patterns are guarded with a negative lookahead so they never also match
+ * the `>=`/`<=` forms (a `>=` would otherwise satisfy `>` too).
+ *
+ * Never widen this to a general SQL expression evaluator — anything outside
+ * these five shapes returns `null`. The numeric patterns use a bounded digit
+ * count (not an unbounded `\d+`) so a pathological migration file (untrusted
+ * input from a target project, T-04-03) cannot make this regex set pursue
+ * catastrophic backtracking.
+ */
+export function parseCheckBounds(checkExpr) {
+  if (typeof checkExpr !== 'string') return null;
+
+  const NUM = '-?\\d{1,15}(?:\\.\\d{1,15})?';
+
+  const between = checkExpr.match(
+    new RegExp(`\\bBETWEEN\\s+(${NUM})\\s+AND\\s+(${NUM})\\b`, 'i')
+  );
+  if (between) {
+    return { min: Number(between[1]), max: Number(between[2]) };
+  }
+
+  const gte = checkExpr.match(new RegExp(`>=\\s*(${NUM})`));
+  const lte = checkExpr.match(new RegExp(`<=\\s*(${NUM})`));
+  const gt = checkExpr.match(new RegExp(`>(?!=)\\s*(${NUM})`));
+  const lt = checkExpr.match(new RegExp(`<(?!=)\\s*(${NUM})`));
+
+  const min = gte ? Number(gte[1]) : gt ? Number(gt[1]) + 1 : null;
+  const max = lte ? Number(lte[1]) : lt ? Number(lt[1]) - 1 : null;
+
+  return min !== null || max !== null ? { min, max } : null;
+}
+
 // Recognized column-level constraint keywords, tried in this order when
 // scanning a column definition's trailing text for where the type token
 // ends. Order matters only in that "NOT NULL" must be tried before a bare
@@ -584,6 +635,7 @@ export function discoverSchema({ projectRoot, migrationsDir = 'supabase/migratio
     if (c.type && enumMap.has(c.type)) {
       c.enumValues = enumMap.get(c.type);
     }
+    c.bounds = c.check ? parseCheckBounds(c.check) : null;
   }
 
   return {

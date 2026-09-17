@@ -14,7 +14,7 @@ import {
   MigrationsDirError,
   PathEscapeError,
 } from './discover-schema.mjs';
-import { parseTestCasesDoc, TestCaseFormatError } from './test-case-doc.mjs';
+import { parseTestCasesDoc, TestCaseFormatError, validateTestCasesDoc } from './test-case-doc.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const DISCOVER_SCHEMA = resolve(__dirname, 'discover-schema.mjs');
@@ -81,6 +81,12 @@ describe('discovery e2e — schema tier', () => {
     expect(checked[0].source.file).toBe('0002_franquicias_horario.sql');
   });
 
+  it('reports a machine-readable bounds object on the dia_cierre constraint record (D-09)', () => {
+    const diaCierre = result.constraints.find((c) => c.column === 'dia_cierre');
+    expect(diaCierre).toBeDefined();
+    expect(diaCierre.bounds).toEqual({ min: 0, max: 6 });
+  });
+
   it('counts the three skipped policy predicates as withCheckSkipped', () => {
     expect(result.withCheckSkipped).toBe(3);
   });
@@ -107,14 +113,14 @@ describe('discovery e2e — document tier', () => {
     expect(doc.metadata.alcance).toBeTruthy();
   });
 
-  it('has at least 2 surfaces and exactly 12 flattened cases', () => {
+  it('has at least 2 surfaces and exactly 14 flattened cases', () => {
     expect(doc.surfaces.length).toBeGreaterThanOrEqual(2);
-    expect(allCases).toHaveLength(12);
+    expect(allCases).toHaveLength(14);
   });
 
-  it('has case IDs case-1 through case-12, in order, no duplicates, no gaps', () => {
+  it('has case IDs case-1 through case-14, in order, no duplicates, no gaps', () => {
     expect(allCases.map((c) => c.id)).toEqual(
-      Array.from({ length: 12 }, (_, i) => `case-${i + 1}`)
+      Array.from({ length: 14 }, (_, i) => `case-${i + 1}`)
     );
   });
 
@@ -235,6 +241,35 @@ describe('discovery e2e — cross-tier link', () => {
     const categoriasSurface = doc.surfaces.find((s) => s.heading.includes('/api/categorias'));
     expect(categoriasSurface).toBeDefined();
     expect(categoriasSurface.cases.length).toBeGreaterThan(0);
+  });
+
+  it('turns the discovered dia_cierre bounds into exactly four boundary cases (min-1/min/max/max+1), each appearing in exactly one case Pasos', () => {
+    const diaCierre = result.constraints.find((c) => c.column === 'dia_cierre');
+    expect(diaCierre.bounds).toEqual({ min: 0, max: 6 });
+    const boundaryValues = [
+      diaCierre.bounds.min - 1,
+      diaCierre.bounds.min,
+      diaCierre.bounds.max,
+      diaCierre.bounds.max + 1,
+    ];
+    expect(boundaryValues).toEqual([-1, 0, 6, 7]);
+
+    const diaCierreSurface = doc.surfaces.find((s) => s.heading.includes('día de cierre'));
+    expect(diaCierreSurface).toBeDefined();
+
+    for (const value of boundaryValues) {
+      const matches = diaCierreSurface.cases.filter((c) =>
+        c.pasos.includes(`dia_cierre: ${value}`)
+      );
+      expect(matches).toHaveLength(1);
+    }
+  });
+
+  it('validates the golden document back through validateTestCasesDoc as valid, carrying 14 cases', () => {
+    const { valid, errors, counts } = validateTestCasesDoc(markdown);
+    expect(errors).toEqual([]);
+    expect(valid).toBe(true);
+    expect(counts.cases).toBe(14);
   });
 });
 

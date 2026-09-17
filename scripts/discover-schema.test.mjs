@@ -21,6 +21,7 @@ import {
   extractConstraints,
   extractEnumTypes,
   listMigrations,
+  parseCheckBounds,
   resolveWithinRoot,
   stripSqlComments,
 } from './discover-schema.mjs';
@@ -193,6 +194,74 @@ describe('extractConstraints — policy disambiguation (load-bearing)', () => {
         expect(r.check).not.toContain('rol()');
       }
     }
+  });
+});
+
+describe('parseCheckBounds', () => {
+  it('a two-sided BETWEEN yields both bounds inclusive', () => {
+    expect(parseCheckBounds('dia_cierre BETWEEN 0 AND 6')).toEqual({ min: 0, max: 6 });
+  });
+
+  it('an inclusive lower bound (>=) yields its literal operand as min, no max', () => {
+    expect(parseCheckBounds('minimo >= 0')).toEqual({ min: 0, max: null });
+  });
+
+  it('an exclusive lower bound (>) resolves to the adjacent inclusive integer', () => {
+    expect(parseCheckBounds('cantidad > 0')).toEqual({ min: 1, max: null });
+  });
+
+  it('an exclusive upper bound (<) resolves to the adjacent inclusive integer', () => {
+    expect(parseCheckBounds('stock < 10')).toEqual({ min: null, max: 9 });
+  });
+
+  it('an inclusive upper bound (<=) yields its literal decimal operand as max, no min', () => {
+    expect(parseCheckBounds('precio <= 99.5')).toEqual({ min: null, max: 99.5 });
+  });
+
+  it('prefers the BETWEEN branch over the comparison branch when both could match', () => {
+    expect(parseCheckBounds('dia_cierre BETWEEN 0 AND 6 AND dia_cierre >= 0')).toEqual({
+      min: 0,
+      max: 6,
+    });
+  });
+
+  it('returns null for a real CHECK whose shape carries no numeric bound', () => {
+    expect(parseCheckBounds("num_nonnulls(objetivo_id, deposito_id) = 1")).toBeNull();
+  });
+
+  it('returns null for a value-set CHECK, never a numeric bound', () => {
+    expect(parseCheckBounds("tipo IN ('ingreso', 'egreso')")).toBeNull();
+  });
+
+  it('returns null for a non-string input rather than throwing', () => {
+    expect(parseCheckBounds(null)).toBeNull();
+  });
+});
+
+describe('discoverSchema — bounds attachment', () => {
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'qa-discover-'));
+  });
+
+  it('attaches bounds derived from a two-sided BETWEEN CHECK to its constraint record', () => {
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    writeFileSync(
+      join(migrationsDir, '0001_x.sql'),
+      'ALTER TABLE franquicias ADD COLUMN dia_cierre smallint CHECK (dia_cierre BETWEEN 0 AND 6);\n'
+    );
+    const result = discoverSchema({ projectRoot: tmpDir });
+    const diaCierre = result.constraints.find((c) => c.column === 'dia_cierre');
+    expect(diaCierre.bounds).toEqual({ min: 0, max: 6 });
+  });
+
+  it('attaches bounds: null to every constraint whose check is null', () => {
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    writeFileSync(join(migrationsDir, '0001_x.sql'), 'CREATE TABLE t (\n  a text NOT NULL\n);\n');
+    const result = discoverSchema({ projectRoot: tmpDir });
+    expect(result.constraints[0].check).toBeNull();
+    expect(result.constraints[0].bounds).toBeNull();
   });
 });
 
