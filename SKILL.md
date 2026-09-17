@@ -386,6 +386,13 @@ and labeling rule before writing anything.
   migration file and line the constraint came from — an expected result
   inferred from how the code currently behaves is never asserted as a
   requirement.
+- **A field whose constraint record from `discover-schema.mjs` carries a
+  non-null `bounds` gets exactly four boundary cases, in `min-1`, `min`,
+  `max`, `max+1` order** (D-09). When only one side of `bounds` resolved,
+  generate only that side's pair — never invent the missing side. When
+  `bounds` is `null`, generate no boundary case for that field at all
+  (D-10). The four values always come from the script's `bounds` JSON,
+  never from reading the migration file by eye.
 - **The chat summary and the document's scope line describe what this pass
   observed, never that a surface is fully covered.** Systematic boundary
   and permission coverage is a later phase's job (DISC-04/DISC-05); this

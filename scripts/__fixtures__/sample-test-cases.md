@@ -74,14 +74,28 @@
 - **Tipo:** positivo
 - **Ejecución:** API
 
-### case-9 — dia_cierre por debajo del rango permitido
+### case-9 — dia_cierre limite inferior menos 1
 - **Precondiciones:** Franquicia existente.
 - **Pasos:** Actualizar la franquicia con `dia_cierre: -1`.
 - **Resultado esperado:** Fallo esperado — origen: CHECK constraint en supabase/migrations/0002_franquicias_horario.sql:7 (`dia_cierre BETWEEN 0 AND 6`), comportamiento HTTP no verificado en el código de la ruta.
 - **Tipo:** edge
 - **Ejecución:** API
 
-### case-10 — dia_cierre por encima del rango permitido
+### case-10 — dia_cierre limite inferior exacto
+- **Precondiciones:** Franquicia existente.
+- **Pasos:** Actualizar la franquicia con `dia_cierre: 0`.
+- **Resultado esperado:** Fallo esperado — origen: CHECK constraint en supabase/migrations/0002_franquicias_horario.sql:7 (`dia_cierre BETWEEN 0 AND 6`), comportamiento HTTP no verificado en el código de la ruta.
+- **Tipo:** edge
+- **Ejecución:** API
+
+### case-11 — dia_cierre limite superior exacto
+- **Precondiciones:** Franquicia existente.
+- **Pasos:** Actualizar la franquicia con `dia_cierre: 6`.
+- **Resultado esperado:** Fallo esperado — origen: CHECK constraint en supabase/migrations/0002_franquicias_horario.sql:7 (`dia_cierre BETWEEN 0 AND 6`), comportamiento HTTP no verificado en el código de la ruta.
+- **Tipo:** edge
+- **Ejecución:** API
+
+### case-12 — dia_cierre limite superior mas 1
 - **Precondiciones:** Franquicia existente.
 - **Pasos:** Actualizar la franquicia con `dia_cierre: 7`.
 - **Resultado esperado:** Fallo esperado — origen: CHECK constraint en supabase/migrations/0002_franquicias_horario.sql:7 (`dia_cierre BETWEEN 0 AND 6`), comportamiento HTTP no verificado en el código de la ruta.
@@ -92,14 +106,14 @@
 
 **Origen del surface:** supabase/migrations/0001_init.sql:8
 
-### case-11 — Alta de usuario con rol válido
+### case-13 — Alta de usuario con rol válido
 - **Precondiciones:** Ninguna.
 - **Pasos:** Insertar un usuario con `rol: "admin"`.
 - **Resultado esperado:** La escritura se acepta; `rol` queda registrado como `admin`.
 - **Tipo:** positivo
 - **Ejecución:** API
 
-### case-12 — Rol fuera del dominio enumerado
+### case-14 — Rol fuera del dominio enumerado
 - **Precondiciones:** Ninguna.
 - **Pasos:** Insertar un usuario con `rol: "superadmin"`.
 - **Resultado esperado:** Fallo esperado — origen: enum `rol_usuario` declarado en supabase/migrations/0001_init.sql:8 y aplicado a `usuarios.rol` en supabase/migrations/0001_init.sql:20, comportamiento HTTP no verificado en el código de la ruta.
