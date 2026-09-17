@@ -44,6 +44,8 @@ export const PAGES_HANDLER_PATTERN =
   /export\s+default\s+async\s+function\s+\w+\s*\(\s*req\s*,\s*res\s*\)/;
 export const IMPERATIVE_ERROR_PATTERN =
   /NextResponse\.json\(\s*\{\s*error:\s*'([^']*)'\s*\}\s*,\s*\{\s*status:\s*(\d{3})\s*\}\s*\)/g;
+export const ROLE_GUARD_PATTERN = /\.rol\s*[!=]==\s*['"]\w+['"]/g;
+export const AUTHZ_STATUS_PATTERN = /\b40[13]\b|no autorizado|solo\s+\S+/i;
 export const EXCLUDED_DIRS = ['node_modules', '.next', 'dist', 'build', 'out', 'coverage', '.git'];
 
 // --- Helpers --------------------------------------------------------------
@@ -178,6 +180,20 @@ describe('pattern doc agreement (anti-drift lock)', () => {
       expect(doc).toContain(layout);
     }
   });
+
+  it('states the role-guard and authz-status pattern sources (added in Task 04-03)', () => {
+    expect(doc).toContain(ROLE_GUARD_PATTERN.source);
+    expect(doc).toContain(AUTHZ_STATUS_PATTERN.source);
+  });
+
+  it('names the four in-scope format signals and the DOM-01 out-of-scope tracker (added in Task 04-03)', () => {
+    expect(doc).toContain('email validator');
+    expect(doc).toContain('regex validator');
+    expect(doc).toContain('CHECK');
+    expect(doc).toContain('allowedValues');
+    expect(doc).toContain('DOM-01');
+    expect(doc).toContain('CUIT');
+  });
 });
 
 // --- API-handler discovery -------------------------------------------------
@@ -210,6 +226,87 @@ describe('API-handler discovery — app-router fixture', () => {
       expect(status).toBeLessThan(500);
       expect(m[1].length).toBeGreaterThan(0);
     }
+  });
+});
+
+// --- Role-guard detection (D-03) --------------------------------------------
+
+describe('role-guard detection', () => {
+  let dir;
+
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = undefined;
+  });
+
+  it('matches the inline guard in the categorias fixture, and the nearby lines satisfy AUTHZ_STATUS_PATTERN', () => {
+    const content = readFileSync(join(APP_FIXTURE, 'app/api/categorias/route.ts'), 'utf8');
+    const matches = [...content.matchAll(ROLE_GUARD_PATTERN)];
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    const lines = content.split('\n');
+    const matchLineIndex = lines.findIndex((line) => ROLE_GUARD_PATTERN.test(line));
+    ROLE_GUARD_PATTERN.lastIndex = 0;
+    expect(matchLineIndex).toBeGreaterThanOrEqual(0);
+    const nearby = lines.slice(matchLineIndex, matchLineIndex + 4).join('\n');
+    expect(AUTHZ_STATUS_PATTERN.test(nearby)).toBe(true);
+  });
+
+  it('matches a helper-wrapped guard (project-local err() call) that IMPERATIVE_ERROR_PATTERN does not match', () => {
+    // Grounded in the dotax shapes 04-RESEARCH.md verified this session:
+    // the role-comparison shape from app/api/bejerman/sync/route.ts:24 and
+    // the err(message, status) helper shape from app/api/usuarios/route.ts:62,
+    // combined into one synthetic handler per the plan's instruction — this
+    // pair is the whole point of the rule: a response-shape detector alone
+    // under-reports the guard the role-comparison detector still finds.
+    dir = mkdtempSync(join(tmpdir(), 'qa-agent-role-guard-'));
+    const handlerSource = [
+      "import { err } from '@/lib/http';",
+      "import { perfilDeSesion } from '@/lib/session';",
+      '',
+      'export async function POST(req: Request) {',
+      '  const caller = await perfilDeSesion();',
+      "  if (!caller || caller.rol !== 'admin') {",
+      "    return err('No autorizado. Solo un administrador puede crear usuarios.', 403);",
+      '  }',
+      '  return err(null, 200);',
+      '}',
+      '',
+    ].join('\n');
+    writeFileSync(join(dir, 'route.ts'), handlerSource);
+    const content = readFileSync(join(dir, 'route.ts'), 'utf8');
+
+    const roleMatches = [...content.matchAll(ROLE_GUARD_PATTERN)];
+    expect(roleMatches.length).toBeGreaterThanOrEqual(1);
+
+    const imperativeMatches = [...content.matchAll(IMPERATIVE_ERROR_PATTERN)];
+    expect(imperativeMatches).toHaveLength(0);
+  });
+
+  it('yields zero matches for a handler with no role comparison at all', () => {
+    const content = readFileSync(join(APP_FIXTURE, 'app/api/categorias/route.ts'), 'utf8');
+    const getHandlerOnly = content.slice(0, content.indexOf('export async function POST'));
+    expect(getHandlerOnly).not.toContain('.rol');
+    const matches = [...getHandlerOnly.matchAll(ROLE_GUARD_PATTERN)];
+    expect(matches).toHaveLength(0);
+  });
+});
+
+// --- Required-field and format detection (DISC-04 scope boundary) -----------
+
+describe('required-field and format detection', () => {
+  const doc = readFileSync(DOC_PATH, 'utf8');
+
+  it('names each of the four in-scope format signals', () => {
+    expect(doc).toContain('email validator');
+    expect(doc).toContain('regex validator');
+    expect(doc).toContain('SQL `CHECK`');
+    expect(doc).toContain('allowedValues');
+  });
+
+  it('names DOM-01 as the out-of-scope tracker for domain-specific formats', () => {
+    expect(doc).toContain('DOM-01');
+    expect(doc).toContain('CUIT');
+    expect(doc).toContain('.planning/REQUIREMENTS.md');
   });
 });
 
