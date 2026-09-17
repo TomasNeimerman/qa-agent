@@ -263,8 +263,12 @@ export function renderCase(caseObj, index, run = {}) {
     lines.push(`- Body: ${renderBody(evidence?.request?.body)}`);
     if (evidence?.request?.auth?.mechanism) {
       const authFile = evidence.request.auth.storageStateFile;
+      // A results file written before D-01 (credential) existed has no
+      // `credential` key — treat it as 'primary' so it still renders, since
+      // every case up to that point meant the primary test user.
+      const credential = evidence.request.auth.credential ?? 'primary';
       lines.push(
-        `- Auth: \`${evidence.request.auth.mechanism}\`` +
+        `- Auth: \`${evidence.request.auth.mechanism}\` (credential: \`${credential}\`)` +
           (authFile ? ` (session file: \`${authFile}\`)` : '')
       );
     }

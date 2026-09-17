@@ -315,6 +315,7 @@ export async function runCase({
   storageStatePath,
   expectStatus,
   expectFields,
+  useSecondary = false,
 }) {
   const m = String(method ?? '').toUpperCase();
   const dispatchKey = DISPATCH[m];
@@ -325,6 +326,14 @@ export async function runCase({
   const absoluteUrl = new URL(url, baseUrl).toString();
   const requestHeaders = token ? { Authorization: `Bearer ${token}` } : {};
   const authMechanism = token && storageStatePath ? 'both' : token ? 'bearer' : storageStatePath ? 'storageState' : 'none';
+  // D-05 infers the role delta by comparing two runs of the same case; without
+  // this field the only thing distinguishing them in results.json is whatever
+  // title the orchestrator typed, which is not captured evidence. A UI session
+  // (storageStatePath alone, no useSecondary) is always the primary test
+  // user's, so `credential` names an identity independent of `mechanism` — a
+  // secondary token is still a bearer token, and overloading `mechanism`
+  // would conflate two independent facts.
+  const credential = useSecondary ? 'secondary' : 'primary';
 
   const context = await request.newContext({
     baseURL: baseUrl,
@@ -414,6 +423,7 @@ export async function runCase({
           auth: {
             mechanism: authMechanism,
             storageStateFile: storageStatePath ? basename(storageStatePath) : null,
+            credential,
           },
         },
         response: {
@@ -614,6 +624,10 @@ async function main() {
       token: config.token,
       expectStatus,
       expectFields,
+      // Taken from config.useSecondary (what readConfig actually resolved),
+      // not re-derived from args — the credential used and the credential
+      // reported can never disagree.
+      useSecondary: config.useSecondary,
     });
   } catch (err) {
     process.stderr.write(`${err.message}\n`);
