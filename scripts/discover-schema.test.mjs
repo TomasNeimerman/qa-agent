@@ -22,6 +22,7 @@ import {
   extractEnumTypes,
   listMigrations,
   parseCheckBounds,
+  parseCheckEnum,
   resolveWithinRoot,
   stripSqlComments,
 } from './discover-schema.mjs';
@@ -238,6 +239,43 @@ describe('parseCheckBounds', () => {
   });
 });
 
+describe('parseCheckEnum', () => {
+  it('a simple two-value IN list yields the literal values in declaration order', () => {
+    expect(parseCheckEnum("tipo IN ('ingreso', 'egreso')")).toEqual(['ingreso', 'egreso']);
+  });
+
+  it('matches the IN keyword case-insensitively, three values', () => {
+    expect(parseCheckEnum("estado in ('abierto','cerrado','anulado')")).toEqual([
+      'abierto',
+      'cerrado',
+      'anulado',
+    ]);
+  });
+
+  it('tolerates newlines inside the value list', () => {
+    expect(parseCheckEnum("tipo IN (\n  'ingreso',\n  'egreso'\n)")).toEqual([
+      'ingreso',
+      'egreso',
+    ]);
+  });
+
+  it('returns null for a BETWEEN expression, no IN keyword present', () => {
+    expect(parseCheckEnum('dia_cierre BETWEEN 0 AND 6')).toBeNull();
+  });
+
+  it('returns null for a plain comparison expression', () => {
+    expect(parseCheckEnum('cantidad > 0')).toBeNull();
+  });
+
+  it('returns null for a subquery membership test — no literal value set', () => {
+    expect(parseCheckEnum('id IN (SELECT id FROM otra)')).toBeNull();
+  });
+
+  it('returns null for a non-string input rather than throwing', () => {
+    expect(parseCheckEnum(null)).toBeNull();
+  });
+});
+
 describe('discoverSchema — bounds attachment', () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'qa-discover-'));
@@ -262,6 +300,40 @@ describe('discoverSchema — bounds attachment', () => {
     const result = discoverSchema({ projectRoot: tmpDir });
     expect(result.constraints[0].check).toBeNull();
     expect(result.constraints[0].bounds).toBeNull();
+  });
+});
+
+describe('discoverSchema — allowedValues attachment', () => {
+  const FIXTURE_REPO = resolve(fileURLToPath(new URL('.', import.meta.url)), '__fixtures__/mock-target-repo');
+
+  it('reports the declared-enum values on usuarios.rol (cross-referenced enum) and null on usuarios.email (no enum, no value-set CHECK)', () => {
+    const result = discoverSchema({ projectRoot: FIXTURE_REPO });
+    const rol = result.constraints.find((c) => c.table === 'usuarios' && c.column === 'rol');
+    const email = result.constraints.find((c) => c.table === 'usuarios' && c.column === 'email');
+    expect(rol.allowedValues).toEqual(['admin', 'franquiciado']);
+    expect(email.allowedValues).toBeNull();
+  });
+
+  it('every constraint record carries an allowedValues key, value may be null', () => {
+    const result = discoverSchema({ projectRoot: FIXTURE_REPO });
+    for (const c of result.constraints) {
+      expect(c).toHaveProperty('allowedValues');
+    }
+  });
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'qa-discover-'));
+  });
+
+  it('reports an inline value-set CHECK as allowedValues when no declared enum matches the column type', () => {
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    writeFileSync(
+      join(migrationsDir, '0001_x.sql'),
+      "CREATE TABLE t (\n  tipo text NOT NULL CHECK (tipo IN ('ingreso', 'egreso'))\n);\n"
+    );
+    const result = discoverSchema({ projectRoot: tmpDir });
+    expect(result.constraints[0].allowedValues).toEqual(['ingreso', 'egreso']);
   });
 });
 

@@ -224,6 +224,49 @@ export function parseCheckBounds(checkExpr) {
   return min !== null || max !== null ? { min, max } : null;
 }
 
+/**
+ * Recognises a value-set membership test inside a `CHECK` expression string
+ * — `<identifier> IN ('a', 'b', ...)` — and returns the literal values in
+ * declaration order, or `null` for anything else. This is the second,
+ * structurally different enum shape real migrations use: the existing
+ * `CREATE TYPE ... AS ENUM` cross-reference (see the `enumMap` loop in
+ * `discoverSchema()`) only recognises a column whose declared SQL *type*
+ * names a declared enum, and never sees an inline `CHECK (col IN (...))`
+ * because that shape carries no type-level declaration at all — the value
+ * set lives only in the check expression string.
+ *
+ * Matches case-insensitively on the `IN` keyword and tolerates newlines and
+ * surrounding whitespace inside the parens (real migrations wrap a long
+ * value list across lines). Returns `null` when the parenthesised body is
+ * not a comma-separated list of single-quoted literals only — most notably
+ * a subquery membership test (`id IN (SELECT id FROM otra)`), which carries
+ * no literal value set to report. Never widen this to parse a subquery's
+ * result set or any other non-literal `IN` body; that is not this
+ * function's job and an unrecognised shape must yield `null`, the same
+ * "never invent a boundary" discipline `parseCheckBounds` already applies
+ * (D-10).
+ *
+ * The literal-list test itself is a single quoted-literal repeated with no
+ * ambiguous nested quantifiers (each alternative starts on a literal `'`
+ * and `[^']*` cannot itself match a `'`), so it cannot pursue catastrophic
+ * backtracking on a pathological migration file (T-04-03, untrusted input).
+ */
+export function parseCheckEnum(checkExpr) {
+  if (typeof checkExpr !== 'string') return null;
+
+  const inMatch = checkExpr.match(/\bIN\s*\(/i);
+  if (!inMatch) return null;
+
+  const openIndex = inMatch.index + inMatch[0].length - 1;
+  const body = extractBalancedParens(checkExpr, openIndex);
+  if (body === null) return null;
+
+  const LITERAL_LIST_RE = /^\s*(?:'[^']*'\s*,\s*)*'[^']*'\s*$/;
+  if (!LITERAL_LIST_RE.test(body)) return null;
+
+  return [...body.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+}
+
 // Recognized column-level constraint keywords, tried in this order when
 // scanning a column definition's trailing text for where the type token
 // ends. Order matters only in that "NOT NULL" must be tried before a bare
@@ -636,6 +679,12 @@ export function discoverSchema({ projectRoot, migrationsDir = 'supabase/migratio
       c.enumValues = enumMap.get(c.type);
     }
     c.bounds = c.check ? parseCheckBounds(c.check) : null;
+    // allowedValues is the unified field downstream generation reads: the
+    // declared-enum cross-reference above when present, otherwise an inline
+    // value-set CHECK, otherwise null. enumValues stays exactly as it was —
+    // the provenance-specific field a reader can still use to tell a
+    // declared enum from an inline CHECK set apart.
+    c.allowedValues = c.enumValues ? c.enumValues : c.check ? parseCheckEnum(c.check) : null;
   }
 
   return {
