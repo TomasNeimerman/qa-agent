@@ -50,6 +50,16 @@ project-scope). An API-only run needs none of this.
   token, exported in the shell that launched Claude Code, or set in the
   target project's `.env.local`. Sent as `Authorization: Bearer <token>` on
   every request.
+- `QA_AGENT_TOKEN_SECONDARY` (optional) — a second, lower-privilege test
+  user's bearer token, for executing the permission and role cases DISC-05
+  generates (D-01). It belongs to a dedicated low-privilege test account —
+  **never** a real user's own login, and never an elevated one, exactly like
+  `QA_AGENT_UI_USER` below. It is selected by `api-client.mjs --secondary`;
+  the flag itself carries no value. A run with `--secondary` and this
+  variable unset stops with a configuration error — it never falls back to
+  `QA_AGENT_TOKEN`, because running a permission case as the wrong identity
+  and reporting it as if it came from the right one would defeat the point
+  of the check.
 - `QA_AGENT_BASE_URL` (optional) — a default base URL, overridden by the
   first argument to `/qa-agent` when one is supplied.
 - `QA_AGENT_UI_USER` / `QA_AGENT_UI_PASSWORD` (required together, only when a
@@ -67,6 +77,20 @@ configuration error message. It never proceeds with a missing or empty
 `Authorization` header and never reports the resulting 401s as ordinary test
 failures (D-09).
 
+**Checking whether `QA_AGENT_TOKEN_SECONDARY` is configured is a rule the
+orchestrator must follow, not background detail** — framed the same way
+`## UI authentication and session reuse` frames credential isolation below.
+Deciding whether a permission case is runnable (`## Case generation
+protocol`) requires knowing only whether this variable is configured, never
+its value. The check is an exit-code-only test whose output is discarded,
+e.g.:
+```
+grep -q '^QA_AGENT_TOKEN_SECONDARY=' <target-project>/.env.local
+```
+Reading the env file with the `Read` tool, or running any command that
+prints the variable, is forbidden — either one puts the secret in the
+conversation transcript.
+
 `api-client.mjs`'s exit codes — a configuration error (2), a refused
 confirmation (3), an unreachable target (4), or a refused production-looking
 host (6) **stops the run**; it is never rendered into the report as if it
@@ -77,7 +101,7 @@ reads one table, not two:
 | Exit code | Meaning |
 |-----------|---------|
 | 0 | Case recorded — passed, failed, or blocked (`--declined`) are all a successful run of the script |
-| 2 | Configuration error — `QA_AGENT_BASE_URL is not configured`, `QA_AGENT_TOKEN is not configured`, or (`ui-login.mjs`) `QA_AGENT_UI_USER`/`QA_AGENT_UI_PASSWORD` not configured |
+| 2 | Configuration error — `QA_AGENT_BASE_URL is not configured`, `QA_AGENT_TOKEN is not configured`, `QA_AGENT_TOKEN_SECONDARY is not configured` (only when `--secondary` is given), `--secondary` combined with `--storage-state`, or (`ui-login.mjs`) `QA_AGENT_UI_USER`/`QA_AGENT_UI_PASSWORD` not configured |
 | 3 | Confirmation required — a destructive call was dispatched without `--confirmed`, nothing was sent |
 | 4 | Target unreachable — either the preflight probe, the dispatch itself, or (`ui-login.mjs`) reaching the login page hit a transport-level failure |
 | 5 | Evidence missing — `format-report.mjs` refused to render a passed/failed case with no response evidence |
@@ -502,6 +526,13 @@ compile against (D-05):
 - **`--base-url`** is the same base URL for every case in a run — resolve it
   once per run (from the skill's first argument or `QA_AGENT_BASE_URL`), not
   per case.
+- **`--secondary`** is added only for a case whose own steps describe acting
+  as the second, lower-privilege user; it is never combined with
+  `--storage-state`, which the script refuses because the two name different
+  identities; and it is never added speculatively to see what happens, for
+  the same reason `--allow-non-local` is never added preemptively. The
+  resulting case's evidence records which credential ran it, so a reader of
+  the report can tell the two runs of a role-boundary pair apart.
 
 ## Confirmation protocol
 
