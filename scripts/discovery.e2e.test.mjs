@@ -4,11 +4,12 @@
 // discovered constraint. This file was written first, before any
 // implementation existed, and watched red — see 03-01-SUMMARY.md.
 
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   discoverSchema,
   MigrationsDirError,
@@ -87,8 +88,21 @@ describe('discovery e2e — schema tier', () => {
     expect(diaCierre.bounds).toEqual({ min: 0, max: 6 });
   });
 
-  it('counts the three skipped policy predicates as withCheckSkipped', () => {
-    expect(result.withCheckSkipped).toBe(3);
+  it('returns a top-level policies array of length 3, one record per fixture CREATE POLICY', () => {
+    expect(result.policies).toHaveLength(3);
+    const byTable = Object.fromEntries(result.policies.map((p) => [p.table, p]));
+    for (const table of ['usuarios', 'categorias', 'franquicias']) {
+      expect(byTable[table]).toBeDefined();
+      expect(byTable[table].command).toBe('INSERT');
+      expect(byTable[table].withCheck).toBeTruthy();
+      expect(byTable[table].source.file).toBe('0001_init.sql');
+      expect(byTable[table].source.line).toBeGreaterThan(0);
+      expect(Number.isInteger(byTable[table].source.line)).toBe(true);
+    }
+  });
+
+  it('counts the three policy WITH CHECK predicates as policyWithCheckCount', () => {
+    expect(result.policyWithCheckCount).toBe(3);
   });
 
   it('gives every constraint a bare source.file present in files and a positive source.line', () => {
@@ -97,6 +111,28 @@ describe('discovery e2e — schema tier', () => {
       expect(c.source.line).toBeGreaterThan(0);
       expect(Number.isInteger(c.source.line)).toBe(true);
     }
+  });
+});
+
+describe('discovery e2e — RLS-free project (D-03, Pitfall 3)', () => {
+  let tmpDir;
+
+  afterEach(() => {
+    if (tmpDir) {
+      rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  it('a migrations directory containing no CREATE POLICY yields an empty policies array, without error', () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'qa-discover-no-rls-'));
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    writeFileSync(join(migrationsDir, '0001_init.sql'), 'CREATE TABLE t (\n  a text NOT NULL\n);\n');
+
+    const result = discoverSchema({ projectRoot: tmpDir });
+    expect(result.policies).toEqual([]);
+    expect(result.policyWithCheckCount).toBe(0);
   });
 });
 

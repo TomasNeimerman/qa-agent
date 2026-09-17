@@ -20,8 +20,10 @@ import {
   discoverSchema,
   extractConstraints,
   extractEnumTypes,
+  extractPolicies,
   listMigrations,
   parseCheckBounds,
+  parseCheckEnum,
   resolveWithinRoot,
   stripSqlComments,
 } from './discover-schema.mjs';
@@ -165,12 +167,12 @@ describe('extractConstraints — policy disambiguation (load-bearing)', () => {
     CREATE POLICY p2 ON t FOR UPDATE WITH CHECK (rol() = 'owner');
   `;
 
-  it('yields exactly one constraint with a non-null check, and withCheckSkipped 2', () => {
+  it('yields exactly one constraint with a non-null check, and policyWithCheckCount 2', () => {
     const records = extractConstraints(sql, { file: 'x.sql' });
     const checked = records.filter((r) => r.check);
     expect(checked).toHaveLength(1);
     expect(checked[0].check).toBe('a > 0');
-    expect(records.withCheckSkipped).toBe(2);
+    expect(records.policyWithCheckCount).toBe(2);
   });
 
   it('a multi-line WITH CHECK predicate still contributes zero constraints', () => {
@@ -184,7 +186,7 @@ describe('extractConstraints — policy disambiguation (load-bearing)', () => {
     `;
     const records = extractConstraints(multiline, { file: 'x.sql' });
     expect(records).toHaveLength(0);
-    expect(records.withCheckSkipped).toBe(1);
+    expect(records.policyWithCheckCount).toBe(1);
   });
 
   it('no constraint check expression ever equals or contains a policy predicate', () => {
@@ -194,6 +196,100 @@ describe('extractConstraints — policy disambiguation (load-bearing)', () => {
         expect(r.check).not.toContain('rol()');
       }
     }
+  });
+});
+
+describe('extractPolicies', () => {
+  it('a FOR INSERT policy with WITH CHECK yields command, no role, no using', () => {
+    const records = extractPolicies(
+      "CREATE POLICY p ON t FOR INSERT WITH CHECK (rol() = 'admin');",
+      { file: 'x.sql' }
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      policyName: 'p',
+      table: 't',
+      command: 'INSERT',
+      role: null,
+      using: null,
+      withCheck: "rol() = 'admin'",
+    });
+  });
+
+  it('a policy with no FOR clause yields command ALL', () => {
+    const records = extractPolicies('CREATE POLICY p ON t WITH CHECK (true);', { file: 'x.sql' });
+    expect(records[0].command).toBe('ALL');
+  });
+
+  it('a FOR SELECT policy with USING and no WITH CHECK yields using set, withCheck null', () => {
+    const records = extractPolicies(
+      "CREATE POLICY p ON t FOR SELECT USING (id = auth.uid());",
+      { file: 'x.sql' }
+    );
+    expect(records[0].using).toBe('id = auth.uid()');
+    expect(records[0].withCheck).toBeNull();
+  });
+
+  it('a FOR ALL policy with both clauses yields both, full balanced-paren bodies with nested parens and AND', () => {
+    const sql = `
+      CREATE POLICY usuarios_admin_write ON usuarios FOR ALL
+        USING (rol_actual() = 'admin' AND tenant_id = tenant_actual())
+        WITH CHECK (rol_actual() = 'admin' AND tenant_id = tenant_actual());
+    `;
+    const records = extractPolicies(sql, { file: 'x.sql' });
+    expect(records).toHaveLength(1);
+    expect(records[0].using).toBe("rol_actual() = 'admin' AND tenant_id = tenant_actual()");
+    expect(records[0].withCheck).toBe("rol_actual() = 'admin' AND tenant_id = tenant_actual()");
+  });
+
+  it('a TO authenticated clause yields role authenticated', () => {
+    const records = extractPolicies('CREATE POLICY p ON t TO authenticated USING (true);', {
+      file: 'x.sql',
+    });
+    expect(records[0].role).toBe('authenticated');
+  });
+
+  it('a TO a, b list yields both roles without throwing', () => {
+    const records = extractPolicies('CREATE POLICY p ON t TO a, b USING (true);', {
+      file: 'x.sql',
+    });
+    expect(records[0].role).toContain('a');
+    expect(records[0].role).toContain('b');
+  });
+
+  it('absence of a TO clause yields role null', () => {
+    const records = extractPolicies('CREATE POLICY p ON t USING (true);', { file: 'x.sql' });
+    expect(records[0].role).toBeNull();
+  });
+
+  it('AS PERMISSIVE before the FOR clause does not prevent a record being produced', () => {
+    const records = extractPolicies(
+      'CREATE POLICY p ON t AS PERMISSIVE FOR ALL USING (true);',
+      { file: 'x.sql' }
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0].command).toBe('ALL');
+  });
+
+  it('AS RESTRICTIVE before the FOR clause does not prevent a record being produced', () => {
+    const records = extractPolicies(
+      'CREATE POLICY p ON t AS RESTRICTIVE FOR SELECT USING (true);',
+      { file: 'x.sql' }
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0].command).toBe('SELECT');
+  });
+
+  it('a CREATE POLICY inside a SQL comment produces no record', () => {
+    const sql = "-- CREATE POLICY p ON t WITH CHECK (true);\nCREATE TABLE t (a int);\n";
+    const records = extractPolicies(sql, { file: 'x.sql' });
+    expect(records).toHaveLength(0);
+  });
+
+  it("each record's source carries the given file name and the statement's 1-based first-character line", () => {
+    const sql = '\n\nCREATE POLICY p ON t WITH CHECK (true);\n';
+    const records = extractPolicies(sql, { file: 'migrations/0001_x.sql' });
+    expect(records[0].source).toEqual({ file: 'migrations/0001_x.sql', line: 3 });
   });
 });
 
@@ -238,6 +334,43 @@ describe('parseCheckBounds', () => {
   });
 });
 
+describe('parseCheckEnum', () => {
+  it('a simple two-value IN list yields the literal values in declaration order', () => {
+    expect(parseCheckEnum("tipo IN ('ingreso', 'egreso')")).toEqual(['ingreso', 'egreso']);
+  });
+
+  it('matches the IN keyword case-insensitively, three values', () => {
+    expect(parseCheckEnum("estado in ('abierto','cerrado','anulado')")).toEqual([
+      'abierto',
+      'cerrado',
+      'anulado',
+    ]);
+  });
+
+  it('tolerates newlines inside the value list', () => {
+    expect(parseCheckEnum("tipo IN (\n  'ingreso',\n  'egreso'\n)")).toEqual([
+      'ingreso',
+      'egreso',
+    ]);
+  });
+
+  it('returns null for a BETWEEN expression, no IN keyword present', () => {
+    expect(parseCheckEnum('dia_cierre BETWEEN 0 AND 6')).toBeNull();
+  });
+
+  it('returns null for a plain comparison expression', () => {
+    expect(parseCheckEnum('cantidad > 0')).toBeNull();
+  });
+
+  it('returns null for a subquery membership test — no literal value set', () => {
+    expect(parseCheckEnum('id IN (SELECT id FROM otra)')).toBeNull();
+  });
+
+  it('returns null for a non-string input rather than throwing', () => {
+    expect(parseCheckEnum(null)).toBeNull();
+  });
+});
+
 describe('discoverSchema — bounds attachment', () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'qa-discover-'));
@@ -262,6 +395,40 @@ describe('discoverSchema — bounds attachment', () => {
     const result = discoverSchema({ projectRoot: tmpDir });
     expect(result.constraints[0].check).toBeNull();
     expect(result.constraints[0].bounds).toBeNull();
+  });
+});
+
+describe('discoverSchema — allowedValues attachment', () => {
+  const FIXTURE_REPO = resolve(fileURLToPath(new URL('.', import.meta.url)), '__fixtures__/mock-target-repo');
+
+  it('reports the declared-enum values on usuarios.rol (cross-referenced enum) and null on usuarios.email (no enum, no value-set CHECK)', () => {
+    const result = discoverSchema({ projectRoot: FIXTURE_REPO });
+    const rol = result.constraints.find((c) => c.table === 'usuarios' && c.column === 'rol');
+    const email = result.constraints.find((c) => c.table === 'usuarios' && c.column === 'email');
+    expect(rol.allowedValues).toEqual(['admin', 'franquiciado']);
+    expect(email.allowedValues).toBeNull();
+  });
+
+  it('every constraint record carries an allowedValues key, value may be null', () => {
+    const result = discoverSchema({ projectRoot: FIXTURE_REPO });
+    for (const c of result.constraints) {
+      expect(c).toHaveProperty('allowedValues');
+    }
+  });
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'qa-discover-'));
+  });
+
+  it('reports an inline value-set CHECK as allowedValues when no declared enum matches the column type', () => {
+    const migrationsDir = join(tmpDir, 'supabase', 'migrations');
+    mkdirSync(migrationsDir, { recursive: true });
+    writeFileSync(
+      join(migrationsDir, '0001_x.sql'),
+      "CREATE TABLE t (\n  tipo text NOT NULL CHECK (tipo IN ('ingreso', 'egreso'))\n);\n"
+    );
+    const result = discoverSchema({ projectRoot: tmpDir });
+    expect(result.constraints[0].allowedValues).toEqual(['ingreso', 'egreso']);
   });
 });
 
