@@ -102,7 +102,23 @@ Plans:
   1. For any discovered set of input fields, the agent generates test cases covering required-field omission, invalid formats, and boundary values (min/max length, numeric limits) (DISC-04).
   2. The agent generates and executes negative/edge cases beyond input validation — out-of-range data, wrong data types, and permission/auth edge cases (e.g. attempting an action outside the test user's role) — as part of the same run (DISC-05).
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Tracer: one discovered CHECK bound becomes exactly four boundary cases in a validating document, plus the subcategory-titling convention (DISC-04, D-08, D-09, D-10)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-02-PLAN.md — `parseCheckEnum` value sets and `extractPolicies`: CREATE POLICY becomes structured records instead of a discarded count (DISC-04, DISC-05, D-03, D-11)
+- [ ] 04-03-PLAN.md — Role-guard and required-field/format detection rubric, proven against inline and helper-wrapped guard shapes (DISC-04, DISC-05, D-03, D-11)
+- [ ] 04-04-PLAN.md — The pending `Ejecución` state in the case-document contract, for a permission case with no secondary credential (DISC-05, D-02, D-04)
+- [ ] 04-05-PLAN.md — `QA_AGENT_TOKEN_SECONDARY` and the `--secondary` dispatch contract, with per-case credential evidence (DISC-05, D-01, D-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-06-PLAN.md — Permission-case generation and dispatch wiring: policy/role-guard cases, pending refusal, secondary-run role delta, type/range rules (DISC-04, DISC-05, D-02, D-03, D-04, D-05, D-07, D-12, D-13, D-14)
 
 ### Phase 5: Smoke-Test Mode & Cross-Project Distribution
 
@@ -128,7 +144,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Foundation, Guardrails & API Testing | 4/4 | Complete    | 2026-08-11 |
 | 2. Browser Execution Engine | 4/4 | Complete    | 2026-08-20 |
 | 3. Dual Discovery & Test-Case Generation | 3/3 | Complete    | 2026-08-24 |
-| 4. Edge-Case & Input Validation Quality | 0/TBD | Not started | - |
+| 4. Edge-Case & Input Validation Quality | 0/6 | Planned     | - |
 | 5. Smoke-Test Mode & Cross-Project Distribution | 0/TBD | Not started | - |
 
 ---
