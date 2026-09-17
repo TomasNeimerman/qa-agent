@@ -504,4 +504,16 @@ describe('renderCase — API auth mechanism rendering', () => {
     const section = renderCase(passedCase(), 1, {});
     expect(section).not.toContain('- Auth:');
   });
+
+  it('renders the credential alongside the mechanism on the Auth line (D-01)', () => {
+    const c = apiCaseWithStorageStateAuth();
+    c.evidence.request.auth.credential = 'secondary';
+    const section = renderCase(c, 1, {});
+    expect(section).toMatch(/- Auth: `storageState`.*credential: `secondary`/);
+  });
+
+  it('renders "primary" for a results file written before credential existed (no credential key)', () => {
+    const section = renderCase(apiCaseWithStorageStateAuth(), 1, {});
+    expect(section).toContain('credential: `primary`');
+  });
 });
