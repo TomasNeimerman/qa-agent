@@ -503,7 +503,11 @@ describe('readConfig — secondary credential (D-01)', () => {
 describe('runCase — evidence.request.auth mechanism (API-03)', () => {
   it('records mechanism "bearer" with a token and no storageStatePath', async () => {
     const caseObj = await runCase({ method: 'GET', url: '/api/clients', baseUrl: mock.url, token: TOKEN });
-    expect(caseObj.evidence.request.auth).toEqual({ mechanism: 'bearer', storageStateFile: null });
+    expect(caseObj.evidence.request.auth).toEqual({
+      mechanism: 'bearer',
+      storageStateFile: null,
+      credential: 'primary',
+    });
   });
 
   it('records mechanism "storageState" with only a storageStatePath, and storageStateFile as the basename only', async () => {
@@ -568,6 +572,66 @@ describe('runCase — evidence.request.auth mechanism (API-03)', () => {
     appendCase(resultsPath, caseObj, { baseUrl: mock.url });
     const resultsRaw = readFileSync(resultsPath, 'utf8');
     expect(resultsRaw).not.toContain(secretCookieValue);
+  });
+});
+
+describe('runCase — evidence.request.auth.credential (D-01, D-05)', () => {
+  it('records credential "secondary" with useSecondary true, and mechanism stays "bearer"', async () => {
+    const caseObj = await runCase({
+      method: 'GET',
+      url: '/api/clients',
+      baseUrl: mock.url,
+      token: TOKEN,
+      useSecondary: true,
+    });
+    expect(caseObj.evidence.request.auth.credential).toBe('secondary');
+    expect(caseObj.evidence.request.auth.mechanism).toBe('bearer');
+  });
+
+  it('records credential "primary" with a token and no useSecondary', async () => {
+    const caseObj = await runCase({ method: 'GET', url: '/api/clients', baseUrl: mock.url, token: TOKEN });
+    expect(caseObj.evidence.request.auth.credential).toBe('primary');
+  });
+
+  it('records credential "primary" with only a storageStatePath — a UI session is always the primary test user\'s', async () => {
+    const storageStatePath = join(tmpDir, 'credential-storage-state.json');
+    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
+
+    const caseObj = await runCase({
+      method: 'GET',
+      url: '/api/clients',
+      baseUrl: mock.url,
+      storageStatePath,
+    });
+    expect(caseObj.evidence.request.auth.credential).toBe('primary');
+  });
+
+  it('with useSecondary omitted entirely, credential is "primary" — every case written before this change means what it says', async () => {
+    const caseObj = await runCase({ method: 'GET', url: '/api/clients', baseUrl: mock.url, token: TOKEN });
+    expect(caseObj.evidence.request.auth.credential).toBe('primary');
+  });
+
+  it('no case object, results file, or stdout contains the secondary token literal value', async () => {
+    const secondaryToken = 'super-secret-secondary-token-literal-value';
+    const caseObj = await runCase({
+      method: 'GET',
+      url: '/api/clients',
+      baseUrl: mock.url,
+      token: secondaryToken,
+      useSecondary: true,
+    });
+    expect(JSON.stringify(caseObj)).not.toContain(secondaryToken);
+
+    const resultsPath = join(tmpDir, 'secondary-secrecy-results.json');
+    appendCase(resultsPath, caseObj, { baseUrl: mock.url });
+    const resultsRaw = readFileSync(resultsPath, 'utf8');
+    expect(resultsRaw).not.toContain(secondaryToken);
+
+    const { stdout } = runClient(
+      ['--method', 'GET', '--url', '/api/clients', '--base-url', cliMockUrl, '--secondary', '--results', join(tmpDir, 'secondary-cli-results.json')],
+      { env: { QA_AGENT_TOKEN_SECONDARY: secondaryToken } }
+    );
+    expect(stdout).not.toContain(secondaryToken);
   });
 });
 
