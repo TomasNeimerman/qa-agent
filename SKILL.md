@@ -397,7 +397,14 @@ and labeling rule before writing anything.
   observed, never that a surface is fully covered.** Systematic boundary
   and permission coverage is a later phase's job (DISC-04/DISC-05); this
   phase records what one discovery pass found, and claiming that pass is
-  complete would make a partial scan read like a guarantee.
+  complete would make a partial scan read like a guarantee. This governs
+  the systematic input-validation pass too: the chat summary reports the
+  total case count the pass produced, broken down so the developer sees how
+  many cases came from boundary expansion versus the rest of the pass, and
+  that count is disclosed before the developer is asked to do anything with
+  the document — a systematic pass that silently multiplies a surface's
+  case count hands the developer an unreadable document and an unaffordable
+  run they never agreed to.
 - **A literal credential, token or connection string read out of the
   target project is never reproduced** in the document — the shape of a
   constraint is written down, its secret values never are.

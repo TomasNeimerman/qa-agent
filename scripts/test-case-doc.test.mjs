@@ -71,7 +71,7 @@ describe('findCase — anchored lookup, the collision case', () => {
   it('case-12 returns the twelfth case', () => {
     const found = findCase(golden, 'case-12');
     expect(found.id).toBe('case-12');
-    expect(found.titulo).toContain('Rol fuera del dominio enumerado');
+    expect(found.titulo).toContain('dia_cierre limite superior mas 1');
   });
 
   it('a bare number resolves to the qualified form and returns the same object', () => {
@@ -150,15 +150,15 @@ describe('parseTestCasesDoc — surface structure', () => {
 });
 
 describe('validateTestCasesDoc — the valid document', () => {
-  it('returns valid with counts totalling 12 cases summing correctly by Tipo and Ejecución', () => {
+  it('returns valid with counts totalling 14 cases summing correctly by Tipo and Ejecución', () => {
     const result = validateTestCasesDoc(golden);
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
-    expect(result.counts.cases).toBe(12);
+    expect(result.counts.cases).toBe(14);
     const tipoSum = Object.values(result.counts.byTipo).reduce((a, b) => a + b, 0);
     const ejecucionSum = Object.values(result.counts.byEjecucion).reduce((a, b) => a + b, 0);
-    expect(tipoSum).toBe(12);
-    expect(ejecucionSum).toBe(12);
+    expect(tipoSum).toBe(14);
+    expect(ejecucionSum).toBe(14);
     expect(result.counts.surfaces).toBeGreaterThanOrEqual(2);
   });
 
@@ -321,7 +321,7 @@ describe('CLI', () => {
     expect(lines).toHaveLength(1);
     const parsed = JSON.parse(lines[0]);
     expect(parsed.valid).toBe(true);
-    expect(parsed.counts.cases).toBe(12);
+    expect(parsed.counts.cases).toBe(14);
   });
 
   it('exits 0 for --file plus --case, printing that single case as JSON', () => {
