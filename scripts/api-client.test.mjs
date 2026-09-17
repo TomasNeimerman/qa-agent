@@ -321,6 +321,185 @@ describe('readConfig — auth-mechanism coverage (API-03, RESEARCH Pitfall 4)', 
   });
 });
 
+describe('readConfig — secondary credential (D-01)', () => {
+  const ORIGINAL_TOKEN = process.env.QA_AGENT_TOKEN;
+  const ORIGINAL_SECONDARY = process.env.QA_AGENT_TOKEN_SECONDARY;
+  const SECONDARY_TOKEN = 'test-token-secondary-xyz';
+
+  afterEach(() => {
+    if (ORIGINAL_TOKEN === undefined) delete process.env.QA_AGENT_TOKEN;
+    else process.env.QA_AGENT_TOKEN = ORIGINAL_TOKEN;
+    if (ORIGINAL_SECONDARY === undefined) delete process.env.QA_AGENT_TOKEN_SECONDARY;
+    else process.env.QA_AGENT_TOKEN_SECONDARY = ORIGINAL_SECONDARY;
+  });
+
+  it('with useSecondary true and both tokens set, resolves the secondary value as token — never the primary', () => {
+    process.env.QA_AGENT_TOKEN = TOKEN;
+    process.env.QA_AGENT_TOKEN_SECONDARY = SECONDARY_TOKEN;
+
+    const config = readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir, useSecondary: true });
+    expect(config.token).toBe(SECONDARY_TOKEN);
+    expect(config.token).not.toBe(TOKEN);
+  });
+
+  it('with useSecondary true and QA_AGENT_TOKEN_SECONDARY unset, throws ConfigError naming the variable and the flag — never falls back to the primary token', () => {
+    process.env.QA_AGENT_TOKEN = TOKEN;
+    delete process.env.QA_AGENT_TOKEN_SECONDARY;
+
+    let threw = false;
+    try {
+      readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir, useSecondary: true });
+    } catch (err) {
+      threw = true;
+      expect(err.message).toContain('QA_AGENT_TOKEN_SECONDARY');
+      expect(err.message).toContain('--secondary');
+    }
+    expect(threw).toBe(true);
+  });
+
+  it('with useSecondary true and a storageStatePath pointing at a real file, throws ConfigError naming both flags regardless of which tokens are set', () => {
+    process.env.QA_AGENT_TOKEN = TOKEN;
+    process.env.QA_AGENT_TOKEN_SECONDARY = SECONDARY_TOKEN;
+    const storageStatePath = join(tmpDir, 'secondary-conflict-storage-state.json');
+    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
+
+    let threw = false;
+    try {
+      readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir, useSecondary: true, storageStatePath });
+    } catch (err) {
+      threw = true;
+      expect(err.message).toContain('--secondary');
+      expect(err.message).toContain('--storage-state');
+    }
+    expect(threw).toBe(true);
+  });
+
+  it('with useSecondary true and a storageStatePath that does not exist, throws the two-identities ConfigError, not the mistyped-path one — the contradiction is named first', () => {
+    delete process.env.QA_AGENT_TOKEN;
+    delete process.env.QA_AGENT_TOKEN_SECONDARY;
+    const missingPath = join(tmpDir, 'does-not-exist-secondary-storage-state.json');
+
+    let threw = false;
+    try {
+      readConfig({
+        baseUrlArg: 'http://example.invalid',
+        projectRoot: tmpDir,
+        useSecondary: true,
+        storageStatePath: missingPath,
+      });
+    } catch (err) {
+      threw = true;
+      expect(err.message).toContain('--secondary');
+      expect(err.message).toContain('--storage-state');
+      expect(err.message).not.toContain(missingPath);
+    }
+    expect(threw).toBe(true);
+  });
+
+  it('with useSecondary omitted or false, the primary path is byte-identical to before: reads QA_AGENT_TOKEN and its absent-credential message still contains the literal scripts/tracer.e2e.test.mjs pins', () => {
+    process.env.QA_AGENT_TOKEN = TOKEN;
+    delete process.env.QA_AGENT_TOKEN_SECONDARY;
+    const config = readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir });
+    expect(config.token).toBe(TOKEN);
+
+    delete process.env.QA_AGENT_TOKEN;
+    let threw = false;
+    try {
+      readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir });
+    } catch (err) {
+      threw = true;
+      expect(err.message).toContain('QA_AGENT_TOKEN is not configured');
+    }
+    expect(threw).toBe(true);
+  });
+
+  it('returns useSecondary on the result object alongside baseUrl, token and storageStatePath', () => {
+    process.env.QA_AGENT_TOKEN = TOKEN;
+    process.env.QA_AGENT_TOKEN_SECONDARY = SECONDARY_TOKEN;
+
+    const primary = readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir });
+    expect(primary.useSecondary).toBe(false);
+
+    const secondary = readConfig({ baseUrlArg: 'http://example.invalid', projectRoot: tmpDir, useSecondary: true });
+    expect(secondary.useSecondary).toBe(true);
+  });
+
+  it('CLI: --secondary with QA_AGENT_TOKEN_SECONDARY absent from the environment exits 2, names the variable in stderr, and sends no request', async () => {
+    const resultsPath = join(tmpDir, 'results.json');
+    const env = { ...process.env, QA_AGENT_TOKEN: TOKEN };
+    delete env.QA_AGENT_TOKEN_SECONDARY;
+
+    let threw = false;
+    try {
+      execFileSync(
+        process.execPath,
+        [API_CLIENT, '--method', 'GET', '--url', '/api/clients', '--base-url', cliMockUrl, '--secondary', '--results', resultsPath],
+        { env, encoding: 'utf8' }
+      );
+    } catch (err) {
+      threw = true;
+      expect(err.status).toBe(2);
+      expect(err.stderr.toString()).toContain('QA_AGENT_TOKEN_SECONDARY');
+    }
+    expect(threw).toBe(true);
+
+    const log = await cliRequestLog();
+    expect(log.length).toBe(0);
+  });
+
+  it('CLI: --secondary --storage-state <path> exits 2 with the two-identities message naming both flags, and sends no request', async () => {
+    const resultsPath = join(tmpDir, 'results.json');
+    const storageStatePath = join(tmpDir, 'cli-secondary-storage-state.json');
+    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }));
+
+    let threw = false;
+    try {
+      execFileSync(
+        process.execPath,
+        [
+          API_CLIENT,
+          '--method',
+          'GET',
+          '--url',
+          '/api/clients',
+          '--base-url',
+          cliMockUrl,
+          '--secondary',
+          '--storage-state',
+          storageStatePath,
+          '--results',
+          resultsPath,
+        ],
+        { env: { ...process.env, QA_AGENT_TOKEN: TOKEN }, encoding: 'utf8' }
+      );
+    } catch (err) {
+      threw = true;
+      expect(err.status).toBe(2);
+      expect(err.stderr.toString()).toContain('--secondary');
+      expect(err.stderr.toString()).toContain('--storage-state');
+    }
+    expect(threw).toBe(true);
+
+    const log = await cliRequestLog();
+    expect(log.length).toBe(0);
+  });
+
+  it('CLI: DELETE --secondary without --confirmed still exits 3 and reads no credential at all — the confirmation gate still runs first', async () => {
+    const resultsPath = join(tmpDir, 'results.json');
+    const env = { ...process.env };
+    delete env.QA_AGENT_TOKEN_SECONDARY;
+
+    const { status } = runClient(
+      ['--method', 'DELETE', '--url', '/api/clients/1', '--base-url', cliMockUrl, '--secondary', '--results', resultsPath],
+      { expectFailure: true, env }
+    );
+
+    expect(status).toBe(3);
+    const log = await cliRequestLog();
+    expect(log.length).toBe(0);
+  });
+});
+
 describe('runCase — evidence.request.auth mechanism (API-03)', () => {
   it('records mechanism "bearer" with a token and no storageStatePath', async () => {
     const caseObj = await runCase({ method: 'GET', url: '/api/clients', baseUrl: mock.url, token: TOKEN });
