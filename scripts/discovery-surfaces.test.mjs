@@ -68,6 +68,11 @@ export const TYPE_AND_RANGE_MARKERS = [
   'valor implicado por el tipo',
 ];
 
+// Running generated cases — pending refusal and secondary dispatch (added
+// in Task 04-06.3). Distinctive literals for the D-02/D-05/D-07 dispatch
+// wiring rules.
+export const PENDING_DISPATCH_MARKERS = ['¿Corro estos', '--secondary', 'pendiente: true'];
+
 // --- Helpers --------------------------------------------------------------
 
 /** Minimal glob-to-RegExp: supports '**' (zero or more path segments,
@@ -238,6 +243,19 @@ describe('case generation protocol — type and range rules (anti-drift lock)', 
 
   it('states every type-implied, wrong-type and out-of-range marker', () => {
     for (const marker of TYPE_AND_RANGE_MARKERS) {
+      expect(skill).toContain(marker);
+    }
+  });
+});
+
+// --- Running generated cases — pending refusal and secondary dispatch -----
+// (anti-drift lock, Task 04-06.3).
+
+describe('running generated cases — pending refusal and secondary dispatch (anti-drift lock)', () => {
+  const skill = readFileSync(SKILL_PATH, 'utf8');
+
+  it('states every pending-refusal and secondary-dispatch marker', () => {
+    for (const marker of PENDING_DISPATCH_MARKERS) {
       expect(skill).toContain(marker);
     }
   });

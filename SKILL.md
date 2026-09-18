@@ -531,7 +531,14 @@ and labeling rule before writing anything.
   carrying the surface count, the case count broken down by `Tipo`, and the
   absolute path of the written file — then stop. Running a case is a
   separate, later request (D-11); this invocation never runs one in the
-  same turn it generated them.
+  same turn it generated them. The chat summary may close with an offer
+  to run the newly generated cases (D-07) — a question naming the case
+  count, such as `¿Corro estos N casos ahora?`, with the pending count
+  named separately from the runnable count so the developer is never
+  offered a number that includes cases the run would refuse. The offer
+  changes nothing about this rule: it is a question, the developer must
+  still answer yes, and no case is ever run in the same turn it was
+  generated.
 
 ## Running generated cases
 
@@ -558,20 +565,53 @@ exactly as they already stand.
    output. An exit code other than 0 means the case could not be resolved
    — report the CLI's own message and stop for that case rather than
    guessing at what was meant.
-4. **Dispatch by the case's `Ejecución` field.** For `API`, construct the
-   `api-client.mjs` invocation exactly as `## Case construction` already
-   specifies, using the case's `Pasos` as the developer's instruction. For
-   `UI`, follow `## UI run protocol` from step 2 onward, using the case's
-   `Pasos` to derive the step loop. Neither protocol changes for a case
-   that arrived this way instead of from a fresh natural-language
-   instruction.
-5. **Every case still passes through `## Confirmation protocol` or `## UI
-   confirmation protocol` at dispatch.** A case document is a description,
-   never an approval: a case whose steps describe a destructive action
-   stops and asks exactly as it would have without a document. This is why
+4. **Dispatch by the case's resolved state, in this order.**
+   - **Pending first.** If the reader's `--case` JSON has
+     `pendiente: true`, the case is not dispatched. Report
+     `pendienteMotivo` — the document's own reason text — verbatim, name
+     `QA_AGENT_TOKEN_SECONDARY` as what is missing and `## Configuration`
+     as where to set it, and stop for that case; then continue with the
+     other named cases rather than aborting the whole run. This refusal
+     is not a test failure and must never be rendered as one; it is not
+     a silent skip — the developer is told, by case ID, which cases the
+     run could not execute; and it is never worked around by
+     substituting the primary credential for the missing secondary one,
+     which would run the case as the wrong identity and report it as if
+     it came from the right one. If `--secondary` is dispatched anyway
+     while the variable is unset, `api-client.mjs`'s own exit-2 refusal
+     is the independent second tier that stops it. The refusal keys on
+     the `pendiente` field the reader's `--case` JSON actually exposes —
+     never on the raw document text — for the same reason step 3 already
+     forbids grepping the document by eye.
+   - **`API`.** Construct the `api-client.mjs` invocation exactly as
+     `## Case construction` already specifies, using the case's `Pasos`
+     as the developer's instruction. A permission case whose steps
+     describe acting as the second, lower-privilege user is dispatched
+     with `--secondary` added exactly as `## Case construction`
+     specifies — never with the credential as an argument, never
+     together with `--storage-state`. To learn the role delta (D-05),
+     dispatch the same case twice — once without the flag, once with it
+     — and compare the two captured results' status codes and response
+     shapes; each result's `evidence.request.auth.credential` names
+     which credential produced it, so the comparison is between two
+     recorded runs rather than between a recorded run and a remembered
+     one. The delta is reported as what was observed — "the secondary
+     credential got 403 where the primary got 201" — never as a claim
+     about a permission model.
+   - **`UI`.** Follow `## UI run protocol` from step 2 onward, using the
+     case's `Pasos` to derive the step loop.
+
+   Neither the `API` nor the `UI` branch changes for a case that arrived
+   this way instead of from a fresh natural-language instruction.
+5. **Every dispatched case still passes through `## Confirmation
+   protocol` or `## UI confirmation protocol` at dispatch.** A case
+   document is a description, never an approval: a case whose steps
+   describe a destructive action — a permission case included — stops
+   and asks exactly as it would have without a document. This is why
    `validateTestCasesDoc` refuses any document carrying a literal from
    `FORBIDDEN_DISPATCH_FLAGS` (exit 9) — a document that already carried
-   `--confirmed` would be an approval nobody gave in this moment.
+   `--confirmed` would be an approval nobody gave in this moment, and
+   that refusal covers a pending case's own block with no exception.
 6. **Render the report with `scripts/format-report.mjs`**, exactly as
    `## Run protocol` step 5 already specifies. Cases run this way produce
    an ordinary run report; results are never written back into the case
@@ -581,7 +621,10 @@ exactly as they already stand.
 Closing note, in the other direction from D-10: generating a document
 never runs a case in the same invocation, and running cases the way this
 section describes never regenerates the document. Each is a terminal step
-for its own invocation.
+for its own invocation. A run that begins because the developer accepted
+`## Case generation protocol`'s run offer (D-07) is an ordinary run of
+this section from step 1, with the same confirmation gates, and it is a
+new turn.
 
 ## Case construction
 
