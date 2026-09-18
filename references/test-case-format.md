@@ -145,7 +145,53 @@ re-infers whether a case is an API call or a browser flow.
 ### Allowed values
 
 - `Tipo` is exactly one of `positivo`, `negativo`, `edge`.
-- `Ejecución` is exactly one of `API`, `UI`.
+- `Ejecución` is `API` or `UI`, optionally followed by a `(pendiente —
+  <motivo>)` qualifier — e.g. `API (pendiente — falta 2do usuario)`. The
+  qualifier never widens the layer itself: `scripts/test-case-doc.mjs`
+  strips it off and validates what remains against the same two-value set
+  it always has (`EXECUTION_MODES`). See the next section for what the
+  qualifier means and when it is used.
+
+### Regla de ejecución pendiente (D-02/D-04)
+
+A permission case is generated whether or not a secondary test credential
+(`QA_AGENT_TOKEN_SECONDARY`) is configured for the current run — it is
+never omitted from the document just because it cannot be run right now
+(D-02). Its absence would be exactly the silent-skip failure mode this
+document's opening invariant already forbids: a case nobody generated is a
+case nobody knows was needed.
+
+When no secondary credential is configured, a case that requires one is
+marked pending in the document by appending a qualifier to its `Ejecución`
+value — the layer stays whatever it already was, `API` or `UI` (D-04: the
+field still records which layer the case belongs to, since the discovered
+check that produced the case determines how it is later run):
+
+```
+- **Ejecución:** API (pendiente — falta 2do usuario)
+```
+
+The pending marker is a fact about this run's configuration, never a claim
+about the application under test — it does not mean the permission check
+itself is broken or untested-for, only that this run has no second
+identity to exercise it with.
+
+A pending case becomes runnable in either of two ways: hand-editing the
+qualifier away once the credential is available (D-06 already permits
+hand-editing a generated document before any case runs), or regenerating
+the document after configuring `QA_AGENT_TOKEN_SECONDARY`.
+
+A pending case is never dispatched. `SKILL.md`'s `## Running generated
+cases` refuses a case marked pending by name — the same document that
+carries the qualifier is what a developer reads to know why — rather than
+attempting to run it and discovering the missing credential at request
+time.
+
+The qualifier's reason text (`falta 2do usuario`, or whatever the pending
+cause is) is written for the developer reading the document, and is never
+a credential value — this document's existing rule that a literal
+credential read out of the target project is never reproduced (see the
+metadata block's transparency rules above) applies to this text unchanged.
 
 ### ID rule (D-04)
 
@@ -265,7 +311,18 @@ exit code 9, before any case from that document is acted on.
 - **Pasos:** POST /api/franquicias/horario con `dia_cierre: 9`
 - **Tipo:** edge
 - **Ejecución:** API
+
+### case-4 — Usuario sin permiso no puede ver categorías de otro usuario
+- **Precondiciones:** Dos usuarios (`admin`, `otro`) con categorías propias
+- **Pasos:** GET /api/categorias autenticado como `otro`, esperando no ver las categorías de `admin`
+- **Resultado esperado:** 200, la lista de categorías no incluye ninguna perteneciente a `admin` (app/api/categorias/route.ts:22, filtro por owner)
+- **Tipo:** negativo
+- **Ejecución:** API (pendiente — falta 2do usuario)
 ```
+
+Case-4 above is the D-02/D-04 pending shape: a permission case generated
+without `QA_AGENT_TOKEN_SECONDARY` configured, still recording its `API`
+layer and its pending reason, exactly as the previous section describes.
 
 ## Closing notes
 
