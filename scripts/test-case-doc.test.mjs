@@ -371,6 +371,111 @@ describe('CLI', () => {
   });
 });
 
+describe('Ejecución pending-execution state (D-02/D-04)', () => {
+  // The golden fixture's case-1 is a plain "- **Ejecución:** API" bullet;
+  // every mutation below appends a "(pendiente — <motivo>)" qualifier to it,
+  // matching the exact shape D-02 words ("pendiente — falta 2do usuario").
+  const PENDING_BULLET =
+    '- **Ejecución:** API (pendiente — falta 2do usuario)';
+  const pendingDoc = golden.replace('- **Ejecución:** API\n\n### case-2', `${PENDING_BULLET}\n\n### case-2`);
+
+  it('parses a pending case successfully, carrying its layer, pendiente flag and reason', () => {
+    const doc = parseTestCasesDoc(pendingDoc);
+    const case1 = doc.surfaces.flatMap((s) => s.cases).find((c) => c.id === 'case-1');
+    expect(case1.ejecucion).toBe('API');
+    expect(case1.pendiente).toBe(true);
+    expect(case1.pendienteMotivo).toBe('falta 2do usuario');
+  });
+
+  it('findCase resolves the same pending shape as parseTestCasesDoc', () => {
+    const found = findCase(pendingDoc, 'case-1');
+    expect(found.ejecucion).toBe('API');
+    expect(found.pendiente).toBe(true);
+    expect(found.pendienteMotivo).toBe('falta 2do usuario');
+  });
+
+  it('a non-pending case reports pendiente: false and pendienteMotivo: null', () => {
+    const found = findCase(golden, 'case-1');
+    expect(found.pendiente).toBe(false);
+    expect(found.pendienteMotivo).toBeNull();
+  });
+
+  it('validateTestCasesDoc reports the document as valid and counts the pending case distinctly', () => {
+    const result = validateTestCasesDoc(pendingDoc);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.counts.pendientes).toBe(1);
+    // The pending case is still counted under its own layer (D-04) — the
+    // byEjecucion sum still totals every case in the document.
+    expect(result.counts.byEjecucion.API).toBeGreaterThan(0);
+    const ejecucionSum = Object.values(result.counts.byEjecucion).reduce((a, b) => a + b, 0);
+    expect(ejecucionSum).toBe(result.counts.cases);
+  });
+
+  it('`node scripts/test-case-doc.mjs --file <path>` exits 0 on a document containing a pending case', () => {
+    const filePath = join(tmpDir, 'pending.md');
+    writeFileSync(filePath, pendingDoc);
+    const { status, stdout } = runCli(['--file', filePath]);
+    expect(status).toBe(0);
+    const parsed = JSON.parse(stdout.trimEnd());
+    expect(parsed.valid).toBe(true);
+    expect(parsed.counts.pendientes).toBe(1);
+  });
+
+  it('`--file <path> --case <id>` on the pending case exits 0 and reports the pending state', () => {
+    const filePath = join(tmpDir, 'pending.md');
+    writeFileSync(filePath, pendingDoc);
+    const { status, stdout } = runCli(['--file', filePath, '--case', 'case-1']);
+    expect(status).toBe(0);
+    const parsed = JSON.parse(stdout.trimEnd());
+    expect(parsed.pendiente).toBe(true);
+    expect(parsed.pendienteMotivo).toBe('falta 2do usuario');
+  });
+
+  it('an Ejecución value outside the allowed set still throws even with a pending qualifier attached, naming the case ID', () => {
+    const mutated = golden.replace(
+      '- **Ejecución:** API\n\n### case-2',
+      '- **Ejecución:** MOVIL (pendiente — falta 2do usuario)\n\n### case-2'
+    );
+    let thrown;
+    try {
+      parseTestCasesDoc(mutated);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(TestCaseFormatError);
+    expect(thrown.message).toContain('case-1');
+    expect(thrown.message).toContain('MOVIL');
+
+    const result = validateTestCasesDoc(mutated);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('case-1') && e.includes('MOVIL'))).toBe(true);
+  });
+
+  it('a pending case whose Pasos contains a forbidden dispatch flag is still rejected, naming the flag', () => {
+    const mutated = golden
+      .replace('- **Ejecución:** API\n\n### case-2', `${PENDING_BULLET}\n\n### case-2`)
+      .replace(
+        '- **Pasos:** POST /api/categorias con body `{ "nombre": "Alquiler", "tipo": "egreso" }`.',
+        '- **Pasos:** POST /api/categorias con body `{ "nombre": "Alquiler", "tipo": "egreso" }` --confirmed.'
+      );
+
+    let thrown;
+    try {
+      findCase(mutated, 'case-1');
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(TestCaseFormatError);
+    expect(thrown.message).toContain('case-1');
+    expect(thrown.message).toContain('--confirmed');
+
+    const result = validateTestCasesDoc(mutated);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('--confirmed') && e.includes('case-1'))).toBe(true);
+  });
+});
+
 describe('exports', () => {
   it('exposes every symbol this plan and the next one build on', () => {
     expect(typeof parseTestCasesDoc).toBe('function');

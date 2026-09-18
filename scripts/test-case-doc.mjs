@@ -47,6 +47,34 @@ export const CASE_FIELDS = ['Precondiciones', 'Pasos', 'Resultado esperado', 'Ti
 export const CASE_TYPES = ['positivo', 'negativo', 'edge'];
 export const EXECUTION_MODES = ['API', 'UI'];
 
+// D-02/D-04 pending-execution rule: a permission case generated while
+// QA_AGENT_TOKEN_SECONDARY is not configured cannot be run, but D-04 still
+// requires the field to record which layer (API/UI) the case belongs to.
+// Rather than widening EXECUTION_MODES into a third literal — which would
+// lose the layer — the Ejecución bullet's value carries an optional
+// parenthesised qualifier after the unchanged two-value layer literal:
+// "API (pendiente — falta 2do usuario)". The qualifier is split off before
+// the enum check runs, so EXECUTION_MODES itself stays exactly ['API', 'UI']
+// and every existing refusal for an out-of-set layer still fires unchanged.
+const PENDING_QUALIFIER_RE = /^(.*?)\s*\(pendiente(?:\s*—\s*(.+))?\)$/;
+
+// Splits a raw Ejecución field value into its layer and pending qualifier.
+// Never throws — callers decide whether an invalid layer is a thrown
+// TestCaseFormatError (parseCaseBlock) or a collected error
+// (validateTestCasesDoc). `valid` is true only when the layer half (with the
+// qualifier, if any, stripped off) is one of EXECUTION_MODES — an unrelated
+// value with a "(pendiente ...)" suffix tacked on is still rejected, so the
+// qualifier can never smuggle an unrecognised dispatch mode past the reader
+// (T-04-04).
+function splitEjecucion(rawValue) {
+  const value = typeof rawValue === 'string' ? rawValue : '';
+  const match = value.match(PENDING_QUALIFIER_RE);
+  const layer = (match ? match[1] : value).trim();
+  const pendiente = Boolean(match);
+  const pendienteMotivo = match && match[2] ? match[2].trim() : null;
+  return { layer, pendiente, pendienteMotivo, valid: EXECUTION_MODES.includes(layer) };
+}
+
 // The three scripts/api-client.mjs CLI flags that pre-approve or bypass its
 // destructive-action gate: --confirmed dispatches a call the confirmation
 // protocol would otherwise pause on, --read-only-intent waves a mutating
@@ -137,10 +165,12 @@ function parseCaseBlock(lines, headingIndex, id, title) {
     );
   }
 
-  const ejecucion = fields['Ejecución'];
-  if (!EXECUTION_MODES.includes(ejecucion)) {
+  const ejecucionRaw = fields['Ejecución'];
+  const { layer: ejecucion, pendiente, pendienteMotivo, valid: ejecucionValid } = splitEjecucion(ejecucionRaw);
+  if (!ejecucionValid) {
     throw new TestCaseFormatError(
-      `Case ${id} has an invalid Ejecución "${ejecucion}" — must be one of ${EXECUTION_MODES.join(', ')}`
+      `Case ${id} has an invalid Ejecución "${ejecucionRaw}" — must be one of ${EXECUTION_MODES.join(', ')}, ` +
+        `optionally followed by a "(pendiente — <motivo>)" qualifier`
     );
   }
 
@@ -153,6 +183,8 @@ function parseCaseBlock(lines, headingIndex, id, title) {
     resultadoEsperado: fields['Resultado esperado'],
     tipo,
     ejecucion,
+    pendiente,
+    pendienteMotivo,
     line: headingIndex + 1,
     nextIndex,
   };
@@ -164,11 +196,18 @@ function parseCaseBlock(lines, headingIndex, id, title) {
  * `{ title, metadata, surfaces }`, where `metadata` carries `generado`,
  * `origen`, `instruccion`, `router` and `alcance`, and each surface is
  * `{ heading, origen, cases }` with every case
- * `{ id, index, titulo, precondiciones, pasos, resultadoEsperado, tipo, ejecucion, line }`.
+ * `{ id, index, titulo, precondiciones, pasos, resultadoEsperado, tipo, ejecucion, pendiente, pendienteMotivo, line }`.
+ * `ejecucion` is always one of `EXECUTION_MODES` (`API`/`UI`) even for a
+ * pending case — D-04's layer is never lost. `pendiente` is `true` when the
+ * `Ejecución` bullet carried a `(pendiente — <motivo>)` qualifier (D-02: a
+ * permission case generated while `QA_AGENT_TOKEN_SECONDARY` is not
+ * configured), and `pendienteMotivo` is that qualifier's reason text, or
+ * `null` when the case is not pending or the qualifier carried no reason.
  * Throws `TestCaseFormatError` — naming the offending case ID and the
  * specific problem — for a missing required field, an out-of-set `Tipo` or
- * `Ejecución` value, a duplicate ID, an ID sequence that is not gapless from
- * `case-1`, or a surface heading with no `**Origen del surface:**` line
+ * `Ejecución` value (the pending qualifier does not widen the layer set —
+ * see `EXECUTION_MODES`), a duplicate ID, an ID sequence that is not gapless
+ * from `case-1`, or a surface heading with no `**Origen del surface:**` line
  * (WR-03). A silent skip is the failure mode this function exists to avoid:
  * a malformed case that parsed to `undefined` would be a case nobody
  * noticed was dropped.
@@ -256,6 +295,8 @@ export function parseTestCasesDoc(markdown) {
         resultadoEsperado: parsed.resultadoEsperado,
         tipo: parsed.tipo,
         ejecucion: parsed.ejecucion,
+        pendiente: parsed.pendiente,
+        pendienteMotivo: parsed.pendienteMotivo,
         line: parsed.line,
       });
       i = parsed.nextIndex;
@@ -275,7 +316,8 @@ export function parseTestCasesDoc(markdown) {
  * for `case-1` from ever matching inside the heading for `case-12`: a bare
  * substring test would find "case-1" as a prefix of "case-12" and return
  * the wrong case, or two at once, the moment a document has 10+ cases
- * (03-RESEARCH.md Pitfall 5). Returns the case's fields plus the surface
+ * (03-RESEARCH.md Pitfall 5). Returns the case's fields (including
+ * `pendiente`/`pendienteMotivo` — see `parseTestCasesDoc`) plus the surface
  * heading it is grouped under. Throws `TestCaseFormatError` when the ID is
  * not present (naming the requested ID and listing every ID the document
  * does contain) or when it is ambiguous — two headings claiming the same ID
@@ -285,7 +327,9 @@ export function parseTestCasesDoc(markdown) {
  * keeps a dispatch-time lookup (the CLI's `--case` branch, or any other
  * caller) from ever handing back a `Pasos` value that already carries a
  * pre-approval like `--confirmed`, independent of whether the caller also
- * ran `validateTestCasesDoc` over the whole document first.
+ * ran `validateTestCasesDoc` over the whole document first, and independent
+ * of whether the resolved case is pending (T-04-05: no code path skips this
+ * scan for a pending case).
  */
 export function findCase(markdown, caseId) {
   const id = /^\d+$/.test(String(caseId)) ? `case-${caseId}` : String(caseId);
@@ -351,6 +395,8 @@ export function findCase(markdown, caseId) {
     resultadoEsperado: parsed.resultadoEsperado,
     tipo: parsed.tipo,
     ejecucion: parsed.ejecucion,
+    pendiente: parsed.pendiente,
+    pendienteMotivo: parsed.pendienteMotivo,
     line: parsed.line,
     surface,
   };
@@ -362,10 +408,16 @@ export function findCase(markdown, caseId) {
  * instead of throwing on the first — a developer fixing a hand-edited
  * document needs the whole list in one pass, not one error per re-run.
  * Returns `{ valid, errors, warnings, counts }`, where `counts` carries
- * `surfaces`, `cases`, `byTipo` (positivo/negativo/edge) and `byEjecucion`
- * (API/UI) totals. Checks: every surface heading is followed by a
+ * `surfaces`, `cases`, `byTipo` (positivo/negativo/edge), `byEjecucion`
+ * (API/UI — a pending case is still counted under its layer here, D-04) and
+ * `pendientes` (D-02: how many of those cases the run could not execute,
+ * counted distinctly so a reader does not have to re-parse the document to
+ * find out). Checks: every surface heading is followed by a
  * `**Origen del surface:**` line (WR-03); every required field present;
- * `Tipo` and `Ejecución` in their allowed sets; no duplicate ID; no gap in
+ * `Tipo` and `Ejecución` in their allowed sets (a `(pendiente — <motivo>)`
+ * qualifier on `Ejecución` is accepted only after its own layer prefix is
+ * validated against `EXECUTION_MODES` — the qualifier never widens what
+ * counts as a valid layer); no duplicate ID; no gap in
  * the `case-N` sequence starting from 1; every `negativo`/`edge` case
  * carries a file-and-line citation in its `Resultado esperado`; and no case
  * block, surface heading/`Origen del surface` line, or document metadata
@@ -417,6 +469,11 @@ export function validateTestCasesDoc(markdown) {
     cases: 0,
     byTipo: { positivo: 0, negativo: 0, edge: 0 },
     byEjecucion: { API: 0, UI: 0 },
+    // D-02/D-04 pending-execution rule: a pending case is still counted
+    // under its layer in byEjecucion (it did resolve to API or UI), and
+    // also counted here so a reader can see how many of those cases the
+    // run could not actually execute without re-parsing the document.
+    pendientes: 0,
   };
 
   let i = nextIndex;
@@ -502,14 +559,17 @@ export function validateTestCasesDoc(markdown) {
         }
       }
 
-      const ejecucion = fields['Ejecución'];
-      if (ejecucion) {
-        if (!EXECUTION_MODES.includes(ejecucion)) {
+      const ejecucionRaw = fields['Ejecución'];
+      if (ejecucionRaw) {
+        const { layer, pendiente, valid: ejecucionValid } = splitEjecucion(ejecucionRaw);
+        if (!ejecucionValid) {
           errors.push(
-            `Case ${id} has an invalid Ejecución "${ejecucion}" — must be one of ${EXECUTION_MODES.join(', ')}`
+            `Case ${id} has an invalid Ejecución "${ejecucionRaw}" — must be one of ${EXECUTION_MODES.join(', ')}, ` +
+              `optionally followed by a "(pendiente — <motivo>)" qualifier`
           );
         } else {
-          counts.byEjecucion[ejecucion] += 1;
+          counts.byEjecucion[layer] += 1;
+          if (pendiente) counts.pendientes += 1;
         }
       }
 
