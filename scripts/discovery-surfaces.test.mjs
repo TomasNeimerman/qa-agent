@@ -59,6 +59,15 @@ export const PERMISSION_GENERATION_MARKERS = [
   'discovery-nextjs.md',
 ];
 
+// Case generation protocol — type-implied, wrong-type and out-of-range
+// rules (added in Task 04-06.2). Distinctive literals `## Case generation
+// protocol` must state for the D-12/D-13/D-14 rules to remain intact.
+export const TYPE_AND_RANGE_MARKERS = [
+  'debe rechazar la request',
+  'security-audit',
+  'valor implicado por el tipo',
+];
+
 // --- Helpers --------------------------------------------------------------
 
 /** Minimal glob-to-RegExp: supports '**' (zero or more path segments,
@@ -216,6 +225,19 @@ describe('case generation protocol — permission cases (anti-drift lock)', () =
 
   it('states every permission-case generation marker', () => {
     for (const marker of PERMISSION_GENERATION_MARKERS) {
+      expect(skill).toContain(marker);
+    }
+  });
+});
+
+// --- Case generation protocol — type and range rules (anti-drift lock) ----
+// D-12/D-13/D-14 (Task 04-06.2).
+
+describe('case generation protocol — type and range rules (anti-drift lock)', () => {
+  const skill = readFileSync(SKILL_PATH, 'utf8');
+
+  it('states every type-implied, wrong-type and out-of-range marker', () => {
+    for (const marker of TYPE_AND_RANGE_MARKERS) {
       expect(skill).toContain(marker);
     }
   });
