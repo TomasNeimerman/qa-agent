@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: edge-case-input-validation-quality
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-09-17T21:17:03.796Z"
+stopped_at: Completed 04-04-PLAN.md
+last_updated: "2026-09-18T12:47:05.405Z"
 last_activity: 2026-09-17
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 17
-  completed_plans: 11
+  completed_plans: 16
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 04 (edge-case-input-validation-quality) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 04
+Plan: 2 of 6
+Status: Ready to execute
 Last activity: 2026-09-17 — Phase 04 execution started
 
-Progress: [██████████] 100%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██████████] 100%
 | Phase 01 P04 | 27min | 3 tasks | 5 files |
 | Phase 03 P02 | 20min | 2 tasks | 13 files |
 | Phase 3 P3 | 48min | 3 tasks | 9 files |
+| Phase 04 P04 | ~20min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 03-03: Scoped Discovery protocol branch inserted as step 2 (immediately after the full-scan-vs-scoped decision), self-contained and cross-referencing the full-scan branch's steps rather than duplicating them
 - [Phase ?]: 03-03: Real-repo validation (Task 3) found and fixed an off-by-one CREATE TABLE column citation bug in discover-schema.mjs — every column after the first in a multi-line CREATE TABLE cited the line above its real definition
 - [Phase ?]: 03-03: STATE.md App-Router-vs-Pages-Router research flag closed — franquix and dotax both detect as App Router only, live, confirming 03-01-RESEARCH.md's prior finding
+- [Phase ?]: 04-04: Task 1 checkpoint resolved as option-b (qualified value) — Ejecución stays API/UI and carries a '(pendiente — <motivo>)' qualifier, keeping both D-02 (pending marking) and D-04 (layer recorded) intact
+- [Phase ?]: 04-04: counts.pendientes added as a sibling of counts.byEjecucion (not a third key inside it) so the pre-existing byEjecucion-sums-to-cases invariant needed no change
 
 ### Pending Todos
 
@@ -112,6 +115,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-17T15:13:20.914Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-edge-case-input-validation-quality/04-CONTEXT.md
+Last session: 2026-09-18T12:47:05.390Z
+Stopped at: Completed 04-04-PLAN.md
+Resume file: None

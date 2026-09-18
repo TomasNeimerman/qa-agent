@@ -32,7 +32,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DISC-02**: El agente puede generar casos de prueba documentados (título, precondiciones, pasos, resultado esperado, tipo: positivo/negativo/edge) a partir de lo descubierto en el código
 - [x] **DISC-03**: El agente puede generar casos de prueba documentados a partir de una instrucción puntual en lenguaje natural, sin necesidad de explorar todo el código
 - [ ] **DISC-04**: El agente cubre sistemáticamente validación de formularios: campos requeridos, formatos inválidos, valores límite (boundary values)
-- [ ] **DISC-05**: El agente genera y ejecuta casos edge/negativos (no solo happy path): datos fuera de rango, tipos incorrectos, casos de permisos/auth
+- [x] **DISC-05**: El agente genera y ejecuta casos edge/negativos (no solo happy path): datos fuera de rango, tipos incorrectos, casos de permisos/auth
 
 ### Reporting
 
@@ -94,7 +94,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISC-02 | Phase 3 | Complete |
 | DISC-03 | Phase 3 | Complete |
 | DISC-04 | Phase 4 | Pending |
-| DISC-05 | Phase 4 | Pending |
+| DISC-05 | Phase 4 | Complete |
 | REP-01 | Phase 1 | Complete |
 | REP-02 | Phase 1 | Complete |
 | REP-03 | Phase 5 | Pending |
