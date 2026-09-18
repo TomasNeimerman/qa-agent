@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: edge-case-input-validation-quality
 status: executing
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-09-18T12:47:05.405Z"
+stopped_at: Completed 04-06-PLAN.md — Phase 04 complete (all 6 plans)
+last_updated: "2026-09-18T12:57:59.690Z"
 last_activity: 2026-09-17
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 
 ## Current Position
 
-Phase: 04 (edge-case-input-validation-quality) — EXECUTING
-Plan: 2 of 6
-Status: Ready to execute
-Last activity: 2026-09-17 — Phase 04 execution started
+Phase: 04 (edge-case-input-validation-quality) — ALL PLANS COMPLETE
+Plan: 6 of 6 (complete)
+Status: All 6 plans executed and committed; phase verification/transition not yet run
+Last activity: 2026-09-18 — Completed 04-06-PLAN.md (final plan in Phase 04)
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [█████████░] 94%
 | Phase 03 P02 | 20min | 2 tasks | 13 files |
 | Phase 3 P3 | 48min | 3 tasks | 9 files |
 | Phase 04 P04 | ~20min | 3 tasks | 3 files |
+| Phase 04 P06 | ~45min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 03-03: STATE.md App-Router-vs-Pages-Router research flag closed — franquix and dotax both detect as App Router only, live, confirming 03-01-RESEARCH.md's prior finding
 - [Phase ?]: 04-04: Task 1 checkpoint resolved as option-b (qualified value) — Ejecución stays API/UI and carries a '(pendiente — <motivo>)' qualifier, keeping both D-02 (pending marking) and D-04 (layer recorded) intact
 - [Phase ?]: 04-04: counts.pendientes added as a sibling of counts.byEjecucion (not a third key inside it) so the pre-existing byEjecucion-sums-to-cases invariant needed no change
+- [Phase ?]: [Phase 4] 04-06: Permission-case group (Task 1) placed between Tipo and the D-09/D-10 boundary bullet, type/range group (Task 2) placed immediately after the boundary bullet — both land before coverage-honesty, satisfying both tasks' placement instructions at once
+- [Phase ?]: [Phase 4] 04-06: Pending-case dispatch refusal keys on the pendiente boolean field test-case-doc.mjs's --case JSON exposes (confirmed by reading the committed reader), not on raw Ejecución text
+- [Phase ?]: [Phase 4] 04-06: 04-04's pending shape already carries the layer as its own prefix, so the protocol states that fact rather than adding a new title requirement for the layer
 
 ### Pending Todos
 
@@ -115,6 +119,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-18T12:47:05.390Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-09-18T12:57:59.674Z
+Stopped at: Completed 04-06-PLAN.md — Phase 04 complete (all 6 plans)
 Resume file: None

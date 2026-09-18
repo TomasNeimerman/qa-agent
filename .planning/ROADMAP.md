@@ -102,7 +102,7 @@ Plans:
   1. For any discovered set of input fields, the agent generates test cases covering required-field omission, invalid formats, and boundary values (min/max length, numeric limits) (DISC-04).
   2. The agent generates and executes negative/edge cases beyond input validation — out-of-range data, wrong data types, and permission/auth edge cases (e.g. attempting an action outside the test user's role) — as part of the same run (DISC-05).
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -118,7 +118,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04-06-PLAN.md — Permission-case generation and dispatch wiring: policy/role-guard cases, pending refusal, secondary-run role delta, type/range rules (DISC-04, DISC-05, D-02, D-03, D-04, D-05, D-07, D-12, D-13, D-14)
+- [x] 04-06-PLAN.md — Permission-case generation and dispatch wiring: policy/role-guard cases, pending refusal, secondary-run role delta, type/range rules (DISC-04, DISC-05, D-02, D-03, D-04, D-05, D-07, D-12, D-13, D-14)
 
 ### Phase 5: Smoke-Test Mode & Cross-Project Distribution
 
@@ -144,7 +144,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Foundation, Guardrails & API Testing | 4/4 | Complete    | 2026-08-11 |
 | 2. Browser Execution Engine | 4/4 | Complete    | 2026-08-20 |
 | 3. Dual Discovery & Test-Case Generation | 3/3 | Complete    | 2026-08-24 |
-| 4. Edge-Case & Input Validation Quality | 5/6 | In Progress|  |
+| 4. Edge-Case & Input Validation Quality | 6/6 | In Progress|  |
 | 5. Smoke-Test Mode & Cross-Project Distribution | 0/TBD | Not started | - |
 
 ---
