@@ -332,6 +332,14 @@ describe('parseCheckBounds', () => {
   it('returns null for a non-string input rather than throwing', () => {
     expect(parseCheckBounds(null)).toBeNull();
   });
+
+  it('returns null for a not-equal (<>) operator — never invents a bound from it (CR-01)', () => {
+    expect(parseCheckBounds('estado <> 5')).toBeNull();
+  });
+
+  it('a not-equal (<>) clause does not leak into a real bound elsewhere in the same expression', () => {
+    expect(parseCheckBounds('estado <> 5 AND cantidad > 0')).toEqual({ min: 1, max: null });
+  });
 });
 
 describe('parseCheckEnum', () => {

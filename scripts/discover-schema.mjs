@@ -193,7 +193,10 @@ export function extractEnumTypes(sql) {
  * (min-1/min/max/max+1) consume `bounds` directly without knowing whether
  * the original expression was inclusive or exclusive. The bare `>`/`<`
  * patterns are guarded with a negative lookahead so they never also match
- * the `>=`/`<=` forms (a `>=` would otherwise satisfy `>` too).
+ * the `>=`/`<=` forms (a `>=` would otherwise satisfy `>` too), and also
+ * guarded against the `<>` (not-equal) operator — `<>` implies no bound at
+ * all, and reading its `>` as "greater than" or its `<` as "less than"
+ * would invent a boundary nobody declared (D-09/D-10; CR-01).
  *
  * Never widen this to a general SQL expression evaluator — anything outside
  * these five shapes returns `null`. The numeric patterns use a bounded digit
@@ -215,8 +218,11 @@ export function parseCheckBounds(checkExpr) {
 
   const gte = checkExpr.match(new RegExp(`>=\\s*(${NUM})`));
   const lte = checkExpr.match(new RegExp(`<=\\s*(${NUM})`));
-  const gt = checkExpr.match(new RegExp(`>(?!=)\\s*(${NUM})`));
-  const lt = checkExpr.match(new RegExp(`<(?!=)\\s*(${NUM})`));
+  // (?<!<) / (?!>) exclude the `<>` (not-equal) operator: `<>` implies no
+  // bound at all, so it must never be misread as `>` (would invent a min)
+  // or as `<` (would invent a max).
+  const gt = checkExpr.match(new RegExp(`(?<!<)>(?!=)\\s*(${NUM})`));
+  const lt = checkExpr.match(new RegExp(`<(?![=>])\\s*(${NUM})`));
 
   const min = gte ? Number(gte[1]) : gt ? Number(gt[1]) + 1 : null;
   const max = lte ? Number(lte[1]) : lt ? Number(lt[1]) - 1 : null;
