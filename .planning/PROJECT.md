@@ -12,7 +12,8 @@ Eliminar la repetición manual de pruebas de regresión y validación de formula
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Validación de formularios: cobertura sistemática de campos requeridos, formatos inválidos y límites — Validado en Fase 4 (DISC-04)
+- [x] Casos edge/negativos: generación y ejecución de casos límite (permisos/auth vía credencial secundaria opcional; datos fuera de rango, tipos incorrectos) — Validado en Fase 4 (DISC-05)
 
 ### Active
 
@@ -20,8 +21,6 @@ Eliminar la repetición manual de pruebas de regresión y validación de formula
 - [ ] Testing de API/backend: probar endpoints, validar contratos, respuestas y códigos de error
 - [ ] Generación de casos de prueba: a partir de un flujo o requisito, producir casos de prueba documentados (incluyendo edge cases y casos negativos)
 - [ ] Descubrimiento dual: el agente puede explorar el código del proyecto para inferir qué probar, y también aceptar instrucciones puntuales en lenguaje natural ("probá el alta de cliente")
-- [ ] Validación de formularios: cobertura sistemática de campos requeridos, formatos inválidos y límites
-- [ ] Casos edge/negativos: generación y ejecución de casos límite (datos raros, permisos, errores de red)
 - [ ] Smoke test post-deploy: chequeo rápido de flujos esenciales tras un deploy
 - [ ] Reporte de resultados: resumen legible de qué se probó, qué pasó, qué falló y por qué
 - [ ] Soporte de acceso dual: puede correr contra la app en local (localhost) o contra un ambiente de staging/test vía URL
@@ -71,4 +70,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 after initialization*
+*Last updated: 2026-09-18 — Phase 4 (Edge-Case & Input Validation Quality) complete*
