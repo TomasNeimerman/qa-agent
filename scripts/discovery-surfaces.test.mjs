@@ -48,6 +48,17 @@ export const ROLE_GUARD_PATTERN = /\.rol\s*[!=]==\s*['"]\w+['"]/g;
 export const AUTHZ_STATUS_PATTERN = /\b40[13]\b|no autorizado|solo\s+\S+/i;
 export const EXCLUDED_DIRS = ['node_modules', '.next', 'dist', 'build', 'out', 'coverage', '.git'];
 
+// Case generation protocol — permission-case generation group (added in
+// Task 04-06.1). These are distinctive literals `## Case generation
+// protocol` must state for the permission-case generation rules to remain
+// intact; a rule the protocol no longer states fails the lock below.
+export const PERMISSION_GENERATION_MARKERS = [
+  'no RLS policy matched this parser',
+  'no role guard was detected by these named patterns',
+  'QA_AGENT_TOKEN_SECONDARY',
+  'discovery-nextjs.md',
+];
+
 // --- Helpers --------------------------------------------------------------
 
 /** Minimal glob-to-RegExp: supports '**' (zero or more path segments,
@@ -193,6 +204,20 @@ describe('pattern doc agreement (anti-drift lock)', () => {
     expect(doc).toContain('allowedValues');
     expect(doc).toContain('DOM-01');
     expect(doc).toContain('CUIT');
+  });
+});
+
+// --- Case generation protocol — permission cases (anti-drift lock) --------
+// D-06: this block fails if SKILL.md's permission-case generation rules
+// (Task 04-06.1) drift away from what this file names as their contract.
+
+describe('case generation protocol — permission cases (anti-drift lock)', () => {
+  const skill = readFileSync(SKILL_PATH, 'utf8');
+
+  it('states every permission-case generation marker', () => {
+    for (const marker of PERMISSION_GENERATION_MARKERS) {
+      expect(skill).toContain(marker);
+    }
   });
 });
 

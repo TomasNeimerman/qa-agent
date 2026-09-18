@@ -410,6 +410,59 @@ and labeling rule before writing anything.
   migration file and line the constraint came from — an expected result
   inferred from how the code currently behaves is never asserted as a
   requirement.
+- **Permission cases are generated from two independent inputs, and
+  neither one's result is evidence about the other.** Both passes always
+  run over what `## Discovery protocol` handed off: the top-level
+  `policies` array from `discover-schema.mjs`'s JSON (each record's
+  `policyName`, `table`, `command`, `role`, `using`, `withCheck` and
+  `source`), and the in-code role guards found by
+  `references/discovery-nextjs.md`'s `## Permission / role-guard
+  detection` rubric. At least one permission case is generated per policy
+  record and per detected role guard — a policy that guards three
+  commands is three cases, not one, and two handlers guarding the same
+  role are two cases, matching this section's existing one-case-per-
+  observed-outcome discipline rather than one case per table.
+- **Every permission case names which pass found it and cites its
+  source** — the whole mitigation for reading silence as coverage. A
+  policy case cites the migration file and line from the record's
+  `source`, quoting the `withCheck` or `using` expression verbatim. A
+  role-guard case cites the handler file and line and quotes the literal
+  message and status read from it, exactly as `## Permission / role-guard
+  detection`'s worked examples do. An empty `policies` array is recorded,
+  in the document's scope line and in the chat summary, as
+  "no RLS policy matched this parser" — never as a statement that the
+  project has no permission boundaries, and never as a reason to skip
+  the in-code pass.
+  Where no role guard matched either, use the rubric's own finding-nothing
+  wording ("no role guard was detected by these named patterns") rather
+  than inventing a new phrasing here.
+- **`Ejecución` for a permission case is the layer the discovered check
+  lives in** — the third case of the `Ejecución` bullet above (D-04): a
+  route-handler role guard is `API`, a page or form guard is `UI`, and an
+  RLS policy is the `API` surface that writes the table the policy is on,
+  named as that surface rather than as the table. Decided here, so the
+  executor never re-infers it.
+- **Whether a permission case is written runnable or pending depends only
+  on whether `QA_AGENT_TOKEN_SECONDARY` is configured** (D-01, D-02) — the
+  case itself is always generated, whether or not a second credential
+  exists. Check with the exit-code-only presence check `## Configuration`
+  documents (`grep -q '^QA_AGENT_TOKEN_SECONDARY=' <target-project>/.env.local`),
+  whose output is discarded; reading the env file or printing the
+  variable is forbidden here for the same reason it is forbidden there.
+  Configured means the layer value above, written plainly. Not configured
+  means the pending shape `references/test-case-format.md`'s `### Regla
+  de ejecución pendiente` publishes — `<Layer> (pendiente — <motivo>)` —
+  written exactly as committed; that shape already carries the layer as
+  its own prefix, so D-04's record of which layer the check lives in
+  survives the pending state without any change to the case title.
+- **The secondary user's role is never asked of the developer up front**
+  (D-05). A case's `Resultado esperado` is written as the role boundary
+  the discovered check states — the guard's own message when the code
+  announces one, the policy's predicate when only the database does — and
+  the actual role delta is inferred later, at run time, from the observed
+  difference between the two runs `## Running generated cases` performs.
+  Generation records the boundary that was found; it never asserts a
+  permission model nobody wrote down.
 - **A field whose constraint record from `discover-schema.mjs` carries a
   non-null `bounds` gets exactly four boundary cases, in `min-1`, `min`,
   `max`, `max+1` order** (D-09). When only one side of `bounds` resolved,
