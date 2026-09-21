@@ -4,8 +4,11 @@
 **Executed:** 2026-09-21
 **Scope:** Discovery → generation → smoke-selection run against the three real
 target repos from this one unmodified installed skill (Task 1). Task 2 (the
-live dispatch run) is recorded separately below — it did not complete for
-all three projects; see `## Verdict`.
+live dispatch run) closed on **franquix evidence only** by user decision:
+DATAX-web was not re-run this phase and dotax was descoped (no fixed
+environment). See `## Task 2 — scope decision` and `## Verdict`. The
+DATAX-side shared demo base (`SBDAMODE`) was not used by any run in this
+phase.
 
 Every count and JSON blob quoted below is the literal output of
 `discover-schema.mjs` or `test-case-doc.mjs`, copied from the Bash tool's
@@ -60,10 +63,13 @@ instruction, not a project-wide glob — recorded in the generated document's
 
 ### Live run
 
-See `## Task 2 — precondition check` below — not performed for this
-project for the reason recorded there (a documented tool-access limit of
-this execution context, not a project-specific configuration gap: this
-project's own `QA_AGENT_TOKEN`/`QA_AGENT_BASE_URL` precondition is met).
+**Not re-run this phase.** No new live run was performed against this
+project. The only live report in `C:/DATAX-web/qa-reports/` is the older
+`2026-08-11-1540-2026-08-11-1540-ext-capabilities.md` (from before this
+phase), which is not evidence for this phase's smoke path and is not
+counted as such. This project's `QA_AGENT_TOKEN`/`QA_AGENT_BASE_URL`
+precondition is met; the run was simply not carried out here (user
+decision, see `## Task 2 — scope decision`).
 
 ---
 
@@ -112,11 +118,13 @@ selected by the smoke rule).
 
 ### Live run
 
-Not performed. See `## Task 2 — precondition check` below: `C:\dotax` has
-no `.env.local` file at all (confirmed by a read-only existence check —
-neither `.env.local` nor `.env` exists in the project root), so
-`QA_AGENT_TOKEN` is not configured anywhere this run could read it from.
-Task 2's own `<precondition>` is unmet for this project.
+**Descoped, not failed.** No live run was performed and nothing was
+touched in dotax's Supabase or Vercel. The user's stated reason is that
+dotax has no fixed environment to target (D-09 requires a project's own
+local/staging target, and there is none to point at). Separately, at the
+time of the precondition check `C:\dotax` had no `.env.local` (nor `.env`),
+so `QA_AGENT_TOKEN` was not configured either. This is a scope decision
+about the environment, not a finding about the skill or the application.
 
 ---
 
@@ -164,20 +172,87 @@ Resolved via a one-off instruction, recorded in the generated document's
 
 ### Live run
 
-Not performed. See `## Task 2 — precondition check` below: `C:\franquix`
-has an `.env.local` file, but it carries no `QA_AGENT_TOKEN` line
-(confirmed by a read-only exit-code-only `grep -q '^QA_AGENT_TOKEN='`
-check that found no match). Task 2's own `<precondition>` is unmet for
-this project.
+Performed by the user's side against franquix's own local dev server
+(the only project with a live run this phase). Evidence is the two report
+files below, which this document quotes and does not re-run; `.env.local`
+was not opened.
+
+- **Resolved base URL:** `http://localhost:3000` (host and port only; the
+  project's own local dev server, not staging or production).
+- **Reports (absolute paths, both exist on disk):**
+  - `C:/franquix/qa-reports/2026-09-21-1232-2026-09-21-1500-api-v1.md` (run 1)
+  - `C:/franquix/qa-reports/2026-09-21-1238-2026-09-21-1245-api-v1-fixed.md` (run 2)
+
+**Run 1 — 0 passed, 3 failed, 0 blocked, 0 pending.** `GET
+/api/v1/franquicias`, `POST /api/v1/ventas` and `POST /api/v1/heartbeat`
+each returned `401 {"error":"API key inválida o revocada"}`. Classification:
+**packaging/credential-type error, not an application defect.** franquix's
+`/api/v1/*` handlers validate the project's own API keys, not the Supabase
+JWT that had been supplied as `QA_AGENT_TOKEN`; the app correctly rejected
+the wrong credential type. The report's own note ("repeated 401 responses
+... usually indicate a QA_AGENT_TOKEN problem") points the same way. It did
+not indicate a skill-code change.
+
+**Run 2 (with a franquix API key) — 3 passed, 2 failed, 0 blocked, 0
+pending.** Passed: `GET /api/v1/franquicias` 200; `POST /api/v1/ventas`
+201 (once sent with a body); `POST /api/v1/heartbeat` 200 (once sent with a
+body). Failed: the first `POST /api/v1/ventas` and `POST
+/api/v1/heartbeat`, both dispatched with an **empty body**, which the app
+answered `400 {"error":"Body JSON inválido"}`. Classification: **case
+construction artifact, not an application defect and not a PKG-02
+failure** — that 400 is exactly the message the handler documents at
+`app/api/v1/heartbeat/route.ts:26`, and the same endpoints returned 201/200
+as soon as a body was sent.
+
+**Relation to the smoke set above.** The live cases were not dispatched
+verbatim from the `--smoke` JSON quoted in this section (that set is one
+case, `POST /api/v1/heartbeat` case-1). The heartbeat request in run 2's
+Case 5 (200, `franquicia` resolved, `sistema` defaulted to `api`) is the
+live counterpart of that case; the `GET /franquicias` and `POST /ventas`
+checks are additional hand-built cases outside the generated document.
+
+**Side effect (recorded as such, not cleaned up):** run 2's `POST
+/api/v1/ventas` wrote a real row into the FranquiX Supabase database — a
+venta `Z-QA-TEST-1`, id `e52a32e3-9867-4f2a-8357-2e27702f1e15`, against the
+franquicia named `QA Sucursal 04899900` (`codigo_externo` `QA04899900`) —
+and the heartbeat call recorded a health signal for the same franquicia.
+Neither was removed. That database is the project's own local/dev target as
+reported by the user; whoever owns it should delete the test venta if they
+do not want it kept. No credential value appears in this document or in the
+quoted reports (the reports redact the `Authorization` header).
+
+**Verdict for this project (D-10):** the discovery → generation →
+smoke-selection → live-dispatch path ran on franquix with no project
+configuration beyond the documented `QA_AGENT_BASE_URL`/token environment
+variables and no skill-code change. The two failure groups above were a
+wrong credential type (run 1) and empty-body case construction (run 2);
+neither is an application bug and neither is a PKG-02 failure. No case in
+either run failed because franquix has a real defect.
 
 ---
 
-## Task 2 — precondition check
+## Task 2 — scope decision
 
-Task 2's own `<precondition>` states: "Each target repo defines
-`QA_AGENT_TOKEN` in its own `.env.local`, verified with the exit-code-only
-presence test." Checked read-only, output discarded, for all three
-projects before any Task 2 work began:
+**User decision (relayed by the orchestrator), which closes Task 2 on
+franquix evidence only:**
+
+| Project | Live smoke run this phase | Status |
+|---|---|---|
+| `C:\franquix` | Yes — `http://localhost:3000`, two runs, reports quoted above | Done |
+| `C:\DATAX-web` | No new run; only the older 2026-08-11 report exists | Not re-run this phase |
+| `C:\dotax` | No — the user says it has no fixed environment | Descoped, not failed |
+
+This document therefore does **not** claim that all three projects ran
+live. One of three did. The other two are stated as what they are: one not
+re-run, one descoped.
+
+### How Task 2 originally stopped (kept for the record)
+
+The executor first stopped at Task 2's own `<precondition>` — "Each target
+repo defines `QA_AGENT_TOKEN` in its own `.env.local`, verified with the
+exit-code-only presence test." Checked read-only, output discarded, for all
+three projects before any Task 2 work began (this is the state at that
+moment; franquix's live runs happened afterwards, on the user's side):
 
 | Project | `.env.local` exists | `QA_AGENT_TOKEN=` present | Precondition met |
 |---|---|---|---|
@@ -208,13 +283,10 @@ discipline this document applies everywhere else: a partial live run
 performed by a tool without the skill's own confirmation gate would not be
 evidence of what `/qa-agent` actually does when a developer runs it.
 
-**What this means for PKG-02:** this is a packaging/environment-setup gap
-for two of three projects (`dotax`, `franquix` — a missing credential) plus
-a tool-access gap specific to this validation being run *from a
-plan-executor* rather than *from the installed skill itself*. Neither is a
-case failing because a target application has a real bug (D-10) — the
-DATAX-web/dotax/franquix live-run pass-rate question this task set out to
-answer is genuinely unanswered by this session, not answered "clean."
+Neither reason was a case failing because a target application has a real
+bug (D-10). They are environment/tool-access facts, and they are why the
+live evidence below comes from the user's own runs rather than from this
+executor.
 
 ---
 
@@ -247,19 +319,28 @@ branch keyed on a project name or path — that part of Phase 3's D-08
 generalization claim, and the deterministic-selection half of REP-03, is
 confirmed live rather than only against fixtures.
 
-The live-dispatch half of PKG-02 (Task 2) is **not confirmed** by this
-session, for the two independent reasons recorded above — this is stated
-per D-10's own criterion rather than blurred into a pass: it is not an
-individual test case failing against a real application bug (which would
-not count against PKG-02), it is (a) a genuine packaging/setup gap
-(`QA_AGENT_TOKEN` missing in two of three projects' `.env.local`) and (b) a
-tool-access boundary of the runtime this validation pass was executed
-from, not of the `/qa-agent` skill itself. Closing this gap needs either
-(1) `QA_AGENT_TOKEN` configured in `dotax`'s and `franquix`'s own
-`.env.local` plus a rerun of the live-dispatch half from an agent context
-that actually holds `AskUserQuestion` and the Playwright MCP tools — i.e.
-the installed `/qa-agent` skill itself, invoked directly, rather than a
-generic plan-executor standing in for it — or (2) an explicit product
-decision that the discovery/generation/selection evidence above is
-sufficient to close PKG-02 without a live-dispatch confirmation this
-session.
+**Live-dispatch half (Task 2), by D-10's criterion — franquix only.** On
+`C:\franquix`, the live run against its own local dev server needed no
+project-specific configuration and no skill-code change. Run 1's three
+401s were a wrong credential type (Supabase JWT supplied where franquix's
+own API key is required) and run 2's two 400s were empty-body case
+construction; neither is an application bug, and neither is a PKG-02
+failure. Run 2's remaining three cases passed (200, 201, 200). On that
+evidence PKG-02 holds for franquix.
+
+**What is not confirmed.** PKG-02 is *not* confirmed live for
+`C:\DATAX-web` (not re-run this phase) or for `C:\dotax` (descoped: no
+fixed environment). For those two the evidence is limited to the
+discovery/generation/selection half above. The user chose to close Task 2
+on the franquix evidence; this document records that as a scoped closure,
+not as a three-project live pass.
+
+**Open items for the owner of the franquix dev database:** the test venta
+`Z-QA-TEST-1` (id `e52a32e3-9867-4f2a-8357-2e27702f1e15`) and the heartbeat
+signal for `QA Sucursal 04899900` were written by run 2 and not cleaned up.
+
+**Process note:** run 1 used a credential of the wrong type and run 2 sent
+two POSTs without a body; both are avoidable by the protocol's own guidance
+(read the target's auth scheme before dispatch; construct the body from the
+case's `Pasos`). They are worth remembering when running `/qa-agent` against
+an API that has its own key scheme.
