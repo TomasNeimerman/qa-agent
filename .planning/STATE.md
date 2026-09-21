@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 05
 current_phase_name: smoke-test-mode-cross-project-distribution
 status: executing
-stopped_at: 05-02 Task 1 committed (a5f7b6b); Task 2 blocked on unmet precondition (see blockers)
-last_updated: "2026-09-21T13:38:15.414Z"
+stopped_at: Completed 05-03-PLAN.md (Installation/mcp-setup wording tightened + clean-directory rehearsal); PKG-03 stays open pending D-12 teammate dry run
+last_updated: "2026-09-21T13:54:45.953Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 05 (smoke-test-mode-cross-project-distribution) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
-Progress: [█████████░] 90%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [█████████░] 90%
 | Phase 04 P04 | ~20min | 3 tasks | 3 files |
 | Phase 04 P06 | ~45min | 3 tasks | 2 files |
 | Phase 05 P01 | 30min | 2 tasks | 4 files |
+| Phase 05 P03 | 35min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5] 05-01: selectSmokeCases lives inside test-case-doc.mjs (not a new sibling script) — mirrors the existing findCase/validateTestCasesDoc export pattern, no new CLI scaffolding needed
 - [Phase ?]: [Phase 5] 05-01: skipped-surface entries use a surface key (mirroring selected's own surface property), not heading, per the plan's acceptance_criteria wording
 - [Phase ?]: [Phase 5] 05-01: --smoke combined with --case exits 2 (configuration conflict, like api-client.mjs's --secondary/--storage-state refusal), not 9
+- [Phase ?]: [Phase 5] 05-03: Configuration ambiguity resolved with a one-paragraph run-type preamble rather than restructuring the bullet list or exit-code table, keeping 'no variable moved between sections' and 'no exit-code table restructuring beyond 05-01' intact
+- [Phase ?]: [Phase 5] 05-03: references/mcp-setup.md's two registration scopes made explicit alternatives via one linking sentence before the existing headings, not a new heading -- heading set stays unchanged
+- [Phase ?]: [Phase 5] 05-03: clean-directory rehearsal proves mechanical sufficiency only, not D-12's teammate dry run -- PKG-03 stays open, logged as WINDOWS.md unrun-verify entry #1
 
 ### Pending Todos
 
@@ -125,6 +129,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-21T13:38:15.400Z
-Stopped at: 05-02 Task 1 committed (a5f7b6b); Task 2 blocked on unmet precondition (see blockers)
-Resume file: .planning/phases/05-smoke-test-mode-cross-project-distribution/05-02-PLAN.md
+Last session: 2026-09-21T13:54:45.940Z
+Stopped at: Completed 05-03-PLAN.md (Installation/mcp-setup wording tightened + clean-directory rehearsal); PKG-03 stays open pending D-12 teammate dry run
+Resume file: None
