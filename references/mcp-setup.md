@@ -1,5 +1,8 @@
 # Playwright MCP Setup
 
+**A browser run needs this file. An API-only run does not** — stop reading
+here if every case you're running is an API case.
+
 This is the only setup step Phase 2 adds beyond the environment variables
 (`QA_AGENT_UI_USER`, `QA_AGENT_UI_PASSWORD`, `QA_AGENT_TOKEN`, `QA_AGENT_BASE_URL`)
 already documented in `SKILL.md`. It is a **one-time action per machine or per
@@ -11,6 +14,11 @@ real Chromium process under the orchestrator's control, and that process is
 
 The package was verified by a human before it was ever fetched or executed —
 see `## Package legitimacy` below.
+
+The two sections immediately below are **alternatives — pick one, not
+both**. User scope (recommended) is the default; project scope is there for
+a team that specifically wants the registration version-controlled inside
+one repo.
 
 ## Register the server (recommended: user scope)
 
@@ -103,14 +111,20 @@ storage-export tool as load-bearing.
 
 ## Verify your install
 
-1. In a Claude Code session with this skill installed, check the session's MCP
-   tool list for entries prefixed `mcp__playwright__` (e.g.
-   `mcp__playwright__browser_navigate`, `mcp__playwright__browser_snapshot`).
-   This prefix is what `SKILL.md`'s allowed-tools list and plan 02-02's
-   `PreToolUse` hook matchers are both written against — a different server
-   key would break both silently.
-2. Confirm `npx @playwright/mcp@latest --help` exits `0` from the project
-   root — proves the approved package resolves and runs on this machine.
+1. **Tool list check.** In a Claude Code session with this skill installed,
+   check the session's MCP tool list for entries prefixed
+   `mcp__playwright__` (e.g. `mcp__playwright__browser_navigate`,
+   `mcp__playwright__browser_snapshot`). This prefix is what `SKILL.md`'s
+   allowed-tools list and plan 02-02's `PreToolUse` hook matchers are both
+   written against — a different server key would break both silently.
+   **Pass:** those entries are present in the tool list. **Fail:** no
+   `mcp__playwright__` entries at all — see `## Troubleshooting` below,
+   "Browser tools don't appear in the session at all."
+2. **Package resolution check.** Confirm `npx @playwright/mcp@latest --help`
+   exits `0` from the project root. **Pass:** exit `0` — proves the approved
+   package resolves and runs on this machine. **Fail:** a non-zero exit, or
+   the command hangs on a missing Chromium download — see
+   `## Troubleshooting` below, "Missing Chromium binary."
 
 ## Troubleshooting
 
