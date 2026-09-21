@@ -137,7 +137,7 @@ reads one table, not two:
 | 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
 | 7 | Login failed (`ui-login.mjs` only) — the login form was found but the supplied `QA_AGENT_UI_USER` was rejected, or no post-login state change occurred; no storage-state file is written |
 | 8 | Refused — a resolved path (`--project-root`/`--migrations-dir`, or a file inside the migrations directory) fell outside the target project root (`discover-schema.mjs` only) |
-| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse or validate back after being written, or a case named when running generated cases (see the section below `## Case generation protocol`) could not be resolved (`scripts/test-case-doc.mjs --file <path> [--case <id>] [--smoke]`; stderr names every offending case ID) — the same code covers a `--smoke` selection over a malformed document (`## Smoke-test protocol`) |
+| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse or validate back after being written, or a case named when running generated cases (see the section below `## Case generation protocol`) could not be resolved (`scripts/test-case-doc.mjs --file <path> [--case <id>] [--smoke]`; stderr names every offending case ID) — the same code covers a `--smoke` selection over a malformed document (`## Smoke-test protocol`); a `--smoke` selection validates the whole document first, so a `FORBIDDEN_DISPATCH_FLAGS` literal anywhere in it exits 9 before any case is selected |
 
 ## UI authentication and session reuse
 
@@ -695,7 +695,21 @@ hands that subset to `## Running generated cases` unchanged.
    case listed under it. The orchestrator never re-derives that rule by
    eye, for the same reason `## Running generated cases` step 3 already
    forbids grepping the document and reading the matched heading by eye.
-5. **Honest summary, before dispatch.** Report, in chat, how many
+5. **Refusal before dispatch.** The `--smoke` invocation in step 4
+   validates the entire document before it selects anything — the same
+   contract a plain `--file` run applies, `FORBIDDEN_DISPATCH_FLAGS` scan
+   included. A document carrying a pre-approval literal anywhere (a case's
+   `Pasos`, a surface heading, the metadata `Instrucción` line), or failing
+   any other format rule, exits 9 with nothing on stdout and every
+   offending case named on stderr. The smoke run stops there: no set is
+   summarised, no case is dispatched, and the developer fixes the document
+   and re-runs rather than working around the refusal. The gate lives in
+   this section instead of being inherited because step 7 enters `##
+   Running generated cases` at that section's step 4, so its step-3 case
+   lookup never runs here, and neither does the per-case scan that lookup
+   performs — a document that already carried a pre-approval flag would be
+   an approval nobody gave.
+6. **Honest summary, before dispatch.** Report, in chat, how many
    surfaces the document has, how many of them contributed a case, every
    surface named in the result's `skipped` array, and `counts.pendientes`
    named separately from the runnable count. A smoke run is a subset, and
@@ -704,8 +718,9 @@ hands that subset to `## Running generated cases` unchanged.
    coverage-honesty bullet already applies to generation; a "smoke
    passed" that silently covered three of four surfaces would be exactly
    the false guarantee that bullet exists to prevent.
-6. **Handoff.** Dispatch the selected set through `## Running generated
-   cases` steps 4-6, unchanged (D-07) — the same pending-first refusal,
+7. **Handoff.** Dispatch the selected set through `## Running generated
+   cases` steps 4-6, unchanged (D-07) — the forbidden-flag scan of step 5
+   has already run by the time anything is dispatched — the same pending-first refusal,
    the same `API` and `UI` branches, the same confirmation gates in
    `## Confirmation protocol`/`## UI confirmation protocol`, and the same
    `format-report.mjs` rendering into the same `qa-reports/` location.
