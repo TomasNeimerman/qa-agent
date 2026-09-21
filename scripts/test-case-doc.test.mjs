@@ -21,12 +21,14 @@ import {
   TestCaseFormatError,
   findCase,
   parseTestCasesDoc,
+  selectSmokeCases,
   validateTestCasesDoc,
 } from './test-case-doc.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const TEST_CASE_DOC = resolve(__dirname, 'test-case-doc.mjs');
 const GOLDEN_DOC_PATH = resolve(__dirname, '__fixtures__/sample-test-cases.md');
+const SMOKE_DOC_PATH = resolve(__dirname, '__fixtures__/sample-test-cases-smoke.md');
 // Normalised to \n — the fixture is committed with CRLF line endings, and
 // every mutation below targets a literal multi-line needle. Both
 // findCase/validateTestCasesDoc split on /\r?\n/ internally, so an LF-only
@@ -369,6 +371,75 @@ describe('CLI', () => {
     expect(status).toBe(2);
     expect(stderr).toContain(missing);
   });
+
+  it('--smoke exits 0 for the golden document, selecting case-1, case-6, case-8, case-13', () => {
+    const { status, stdout } = runCli(['--file', GOLDEN_DOC_PATH, '--smoke']);
+    expect(status).toBe(0);
+    const lines = stdout.trimEnd().split('\n');
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.selected.map((c) => c.id)).toEqual(['case-1', 'case-6', 'case-8', 'case-13']);
+    expect(parsed.counts).toEqual({
+      surfaces: 4,
+      selected: 4,
+      skipped: 0,
+      pendientes: 0,
+      byEjecucion: { API: 4, UI: 0 },
+    });
+  });
+
+  it('--smoke exits 0 for the scoped fixture, selecting exactly one UI case', () => {
+    const scopedDocPath = resolve(__dirname, '__fixtures__/sample-test-cases-scoped.md');
+    const { status, stdout } = runCli(['--file', scopedDocPath, '--smoke']);
+    expect(status).toBe(0);
+    const parsed = JSON.parse(stdout.trimEnd());
+    expect(parsed.selected).toHaveLength(1);
+    expect(parsed.selected[0].id).toBe('case-1');
+    expect(parsed.selected[0].ejecucion).toBe('UI');
+  });
+
+  it('--smoke exits 0 for the smoke fixture, naming the skipped surface and counting the pending case', () => {
+    const { status, stdout } = runCli(['--file', SMOKE_DOC_PATH, '--smoke']);
+    expect(status).toBe(0);
+    const parsed = JSON.parse(stdout.trimEnd());
+    expect(parsed.skipped).toHaveLength(1);
+    expect(parsed.skipped[0].surface).toBe('DELETE /api/insumos/:id');
+    expect(parsed.counts.pendientes).toBe(1);
+    const surface3 = parsed.selected.find((c) => c.surface === 'Insumos — eliminación solo admin (rol_usuario)');
+    expect(surface3.pendiente).toBe(true);
+    expect(surface3.pendienteMotivo).toBeTruthy();
+  });
+
+  it('the smoke fixture also validates cleanly without --smoke (valid: true)', () => {
+    const { status, stdout } = runCli(['--file', SMOKE_DOC_PATH]);
+    expect(status).toBe(0);
+    const parsed = JSON.parse(stdout.trimEnd());
+    expect(parsed.valid).toBe(true);
+  });
+
+  it('--smoke exits 9 against a malformed document, naming the parse problem on stderr', () => {
+    const badDoc = golden.replace('## POST /api/categorias\n\n**Origen del surface:** app/api/categorias/route.ts:12-41\n', '## POST /api/categorias\n');
+    const filePath = join(tmpDir, 'bad-smoke.md');
+    writeFileSync(filePath, badDoc);
+    const { status, stdout, stderr } = runCli(['--file', filePath, '--smoke']);
+    expect(status).toBe(9);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('Origen del surface');
+  });
+
+  it('--smoke exits 2 against a path that does not exist', () => {
+    const missing = join(tmpDir, 'does-not-exist.md');
+    const { status } = runCli(['--file', missing, '--smoke']);
+    expect(status).toBe(2);
+  });
+
+  it('--smoke combined with --case exits 2, naming both flags on stderr', () => {
+    const { status, stdout, stderr } = runCli(['--file', GOLDEN_DOC_PATH, '--smoke', '--case', '3']);
+    expect(status).toBe(2);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('--smoke');
+    expect(stderr).toContain('--case');
+  });
 });
 
 describe('Ejecución pending-execution state (D-02/D-04)', () => {
@@ -476,11 +547,109 @@ describe('Ejecución pending-execution state (D-02/D-04)', () => {
   });
 });
 
+describe('selectSmokeCases — the deterministic smoke rule (D-02)', () => {
+  const smokeDoc = readFileSync(SMOKE_DOC_PATH, 'utf8').replace(/\r\n/g, '\n');
+  const scopedDocPath = resolve(__dirname, '__fixtures__/sample-test-cases-scoped.md');
+  const scopedDoc = readFileSync(scopedDocPath, 'utf8').replace(/\r\n/g, '\n');
+
+  it('selects one positivo case per surface, in document order, for the full-scan golden document', () => {
+    const parsed = parseTestCasesDoc(golden);
+    const result = selectSmokeCases(parsed);
+    expect(result.selected.map((c) => c.id)).toEqual(['case-1', 'case-6', 'case-8', 'case-13']);
+  });
+
+  it('every selected item is tipo positivo and carries surface plus every parsed case field', () => {
+    const parsed = parseTestCasesDoc(golden);
+    const result = selectSmokeCases(parsed);
+    for (const item of result.selected) {
+      expect(item.tipo).toBe('positivo');
+      expect(item.surface).toBeTruthy();
+      expect(item.id).toBeTruthy();
+      expect(item.titulo).toBeTruthy();
+      expect(item.precondiciones).toBeTruthy();
+      expect(item.pasos).toBeTruthy();
+      expect(item.resultadoEsperado).toBeTruthy();
+      expect(EXECUTION_MODES).toContain(item.ejecucion);
+      expect(typeof item.pendiente).toBe('boolean');
+      expect('pendienteMotivo' in item).toBe(true);
+      expect(typeof item.line).toBe('number');
+    }
+  });
+
+  it('selects exactly one UI case for the scoped single-surface fixture', () => {
+    const parsed = parseTestCasesDoc(scopedDoc);
+    const result = selectSmokeCases(parsed);
+    expect(result.selected).toHaveLength(1);
+    expect(result.selected[0].id).toBe('case-1');
+    expect(result.selected[0].ejecucion).toBe('UI');
+  });
+
+  it('picks the first positivo, not the first case, when a negativo precedes it in the same surface', () => {
+    const parsed = parseTestCasesDoc(smokeDoc);
+    const result = selectSmokeCases(parsed);
+    const surface1 = result.selected.find((c) => c.surface === 'POST /api/insumos');
+    expect(surface1.id).toBe('case-2');
+    expect(surface1.tipo).toBe('positivo');
+  });
+
+  it('a surface with no positivo case contributes nothing and is named in skipped', () => {
+    const parsed = parseTestCasesDoc(smokeDoc);
+    const result = selectSmokeCases(parsed);
+    expect(result.selected.some((c) => c.surface === 'DELETE /api/insumos/:id')).toBe(false);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0].surface).toBe('DELETE /api/insumos/:id');
+    expect(result.skipped[0].motivo).toContain('no positivo case');
+  });
+
+  it('a pending first positivo stays selected and is never replaced by a later runnable positivo', () => {
+    const parsed = parseTestCasesDoc(smokeDoc);
+    const result = selectSmokeCases(parsed);
+    const surface3 = result.selected.find((c) => c.surface === 'Insumos — eliminación solo admin (rol_usuario)');
+    expect(surface3.id).toBe('case-5');
+    expect(surface3.pendiente).toBe(true);
+    expect(surface3.pendienteMotivo).toBe('falta 2do usuario');
+  });
+
+  it('counts surfaces, selected, skipped, pendientes and byEjecucion for the smoke fixture', () => {
+    const parsed = parseTestCasesDoc(smokeDoc);
+    const result = selectSmokeCases(parsed);
+    expect(result.counts).toEqual({
+      surfaces: 3,
+      selected: 2,
+      skipped: 1,
+      pendientes: 1,
+      byEjecucion: { API: 2, UI: 0 },
+    });
+  });
+
+  it('returns empty selected, empty skipped and zeroed counts for an empty surfaces array, throwing nothing', () => {
+    expect(() => selectSmokeCases({ surfaces: [] })).not.toThrow();
+    const result = selectSmokeCases({ surfaces: [] });
+    expect(result.selected).toEqual([]);
+    expect(result.skipped).toEqual([]);
+    expect(result.counts).toEqual({
+      surfaces: 0,
+      selected: 0,
+      skipped: 0,
+      pendientes: 0,
+      byEjecucion: { API: 0, UI: 0 },
+    });
+  });
+
+  it('performs no file I/O and mutates nothing on the parsed object it is handed', () => {
+    const parsed = parseTestCasesDoc(golden);
+    const snapshot = JSON.parse(JSON.stringify(parsed));
+    selectSmokeCases(parsed);
+    expect(parsed).toEqual(snapshot);
+  });
+});
+
 describe('exports', () => {
   it('exposes every symbol this plan and the next one build on', () => {
     expect(typeof parseTestCasesDoc).toBe('function');
     expect(typeof findCase).toBe('function');
     expect(typeof validateTestCasesDoc).toBe('function');
+    expect(typeof selectSmokeCases).toBe('function');
     expect(Array.isArray(FORBIDDEN_DISPATCH_FLAGS)).toBe(true);
     expect(FORBIDDEN_DISPATCH_FLAGS).toHaveLength(3);
     expect(CASE_HEADING_PATTERN).toBeInstanceOf(RegExp);

@@ -16,13 +16,17 @@
 //
 // CLI exit codes:
 //   0 = document valid (or, with --case, the requested case was found and
-//       printed) — exactly one line of JSON on stdout
-//   2 = --file is missing, or the given path does not exist; stderr names
-//       what is missing
+//       printed; or, with --smoke, the smoke set was selected) — exactly
+//       one line of JSON on stdout
+//   2 = --file is missing, or the given path does not exist; or --smoke was
+//       combined with --case (they select different things, and silently
+//       honouring one would run cases nobody asked for) — stderr names what
+//       is missing or which flags conflict
 //   9 = the document failed to parse or validate (a missing field, an
 //       out-of-set Tipo/Ejecución, a duplicate or gapped ID, a missing
 //       citation, or a forbidden dispatch flag) — the full error list is
-//       written to stderr before any case from it is acted on
+//       written to stderr before any case from it is acted on; a --smoke
+//       selection over the same malformed document exits the same way
 // Codes 3-8 keep the meanings scripts/api-client.mjs and
 // scripts/discover-schema.mjs already assigned them and are never reused
 // here.
@@ -403,6 +407,80 @@ export function findCase(markdown, caseId) {
 }
 
 /**
+ * Reduces an already-parsed document (`parseTestCasesDoc`'s return shape) to
+ * a deterministic smoke set: one `positivo` case per surface (D-02), the
+ * first one listed under that surface's heading — never a `negativo`/`edge`
+ * case, and never a later `positivo` in the same surface. This function
+ * resolves two ambiguities REP-03 would otherwise leave to the
+ * orchestrator's judgment (D-01): what counts as "essential" is a
+ * deterministic rule over the document's own structure, not a call made by
+ * eye each time; and a surface that contributes nothing is a fact the
+ * caller has to be able to report, not a silent absence — it is returned by
+ * name in `skipped` rather than dropped.
+ *
+ * A selected case that carries `pendiente: true` (D-02/D-04 of
+ * `parseTestCasesDoc`) stays selected — the rule names the first `positivo`,
+ * and looking past it for a runnable alternative would report a surface as
+ * smoke-checked on the strength of a case the rule never chose. Its
+ * `pendiente`/`pendienteMotivo` ride through on the returned object so the
+ * pending refusal in `SKILL.md`'s `## Running generated cases` step 4 fires
+ * unchanged when the smoke set is later dispatched.
+ *
+ * Returns `{ selected, skipped, counts }`. Each `selected` entry is the
+ * case's own parsed fields plus a `surface` property naming the heading it
+ * was grouped under. Each `skipped` entry is `{ surface, motivo }` naming a
+ * surface that had no `positivo` case. `counts` carries `surfaces` (total
+ * `##` surfaces seen), `selected`, `skipped`, `pendientes` and
+ * `byEjecucion` (`API`/`UI`) — mirroring `validateTestCasesDoc`'s existing
+ * `counts` shape, including that a pending case is counted under its own
+ * layer in `byEjecucion` and separately in `pendientes`, so a reader does
+ * not have to re-parse the document to learn how many of the selected cases
+ * the run would refuse.
+ *
+ * Throws nothing. An empty `parsedDoc.surfaces`, or a document where every
+ * surface lacks a `positivo`, returns an empty `selected` with every surface
+ * named in `skipped` — an empty selection is a fact to report, not a
+ * failure. Structural document problems are already `parseTestCasesDoc`'s
+ * `TestCaseFormatError` and stay there; this function introduces no new
+ * failure mode.
+ *
+ * Performs no file I/O of its own and mutates nothing on the object it is
+ * handed — every returned case is a fresh object built from the input
+ * case's own fields via spread, never the input object itself.
+ */
+export function selectSmokeCases(parsedDoc) {
+  const selected = [];
+  const skipped = [];
+  const counts = {
+    surfaces: 0,
+    selected: 0,
+    skipped: 0,
+    pendientes: 0,
+    byEjecucion: { API: 0, UI: 0 },
+  };
+
+  const surfaces = parsedDoc?.surfaces ?? [];
+  for (const surface of surfaces) {
+    counts.surfaces += 1;
+    const firstPositivo = surface.cases.find((c) => c.tipo === 'positivo');
+    if (firstPositivo) {
+      selected.push({ ...firstPositivo, surface: surface.heading });
+      counts.selected += 1;
+      counts.byEjecucion[firstPositivo.ejecucion] += 1;
+      if (firstPositivo.pendiente) counts.pendientes += 1;
+    } else {
+      skipped.push({
+        surface: surface.heading,
+        motivo: `Surface "${surface.heading}" has no positivo case`,
+      });
+      counts.skipped += 1;
+    }
+  }
+
+  return { selected, skipped, counts };
+}
+
+/**
  * Validates a test-cases document against every rule
  * `references/test-case-format.md` states, collecting every violation
  * instead of throwing on the first — a developer fixing a hand-edited
@@ -634,10 +712,41 @@ async function main() {
 
   const markdown = readFileSync(filePath, 'utf8');
 
-  if (typeof args.case === 'string') {
+  const smokeRequested = args.smoke !== undefined;
+  const caseRequested = typeof args.case === 'string';
+
+  // D-07's framing is that a smoke selection adds no new execution
+  // mechanism — --smoke and --case select different things (a deterministic
+  // subset vs. a single named case), and silently honouring one would run
+  // cases nobody asked for. Checked before either branch runs so neither one
+  // is picked over the other.
+  if (smokeRequested && caseRequested) {
+    process.stderr.write('--smoke cannot be combined with --case — they select different things\n');
+    process.exit(2);
+    return;
+  }
+
+  if (caseRequested) {
     try {
       const found = findCase(markdown, args.case);
       process.stdout.write(`${JSON.stringify(found)}\n`);
+      process.exit(0);
+    } catch (err) {
+      if (err instanceof TestCaseFormatError) {
+        process.stderr.write(`${err.message}\n`);
+        process.exit(9);
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  if (smokeRequested) {
+    try {
+      const parsed = parseTestCasesDoc(markdown);
+      const result = selectSmokeCases(parsed);
+      process.stdout.write(`${JSON.stringify(result)}\n`);
       process.exit(0);
     } catch (err) {
       if (err instanceof TestCaseFormatError) {
