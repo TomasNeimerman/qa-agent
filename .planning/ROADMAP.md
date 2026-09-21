@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Browser Execution Engine** - Natural-language-directed browser automation with test-account auth and UI↔API session reuse (completed 2026-08-20)
 - [x] **Phase 3: Dual Discovery & Test-Case Generation** - Code-aware and natural-language discovery that produces documented, executable test cases (completed 2026-08-24)
 - [x] **Phase 4: Edge-Case & Input Validation Quality** - Systematic boundary, negative, and permission edge-case coverage grounded in discovered constraints (completed 2026-09-18)
-- [ ] **Phase 5: Smoke-Test Mode & Cross-Project Distribution** - Fast post-deploy smoke checks and unmodified portability across the team's projects
+- [x] **Phase 5: Smoke-Test Mode & Cross-Project Distribution** - Fast post-deploy smoke checks and unmodified portability across the team's projects (completed 2026-09-21)
 
 ## Phase Details
 
@@ -156,7 +156,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Browser Execution Engine | 4/4 | Complete    | 2026-08-20 |
 | 3. Dual Discovery & Test-Case Generation | 3/3 | Complete    | 2026-08-24 |
 | 4. Edge-Case & Input Validation Quality | 6/6 | Complete    | 2026-09-18 |
-| 5. Smoke-Test Mode & Cross-Project Distribution | 4/4 | In Progress|  |
+| 5. Smoke-Test Mode & Cross-Project Distribution | 4/4 | Complete    | 2026-09-21 |
 
 ---
 *Roadmap created: 2026-08-10*
