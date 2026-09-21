@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 05
 current_phase_name: smoke-test-mode-cross-project-distribution
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-09-21T13:31:42.739Z"
+stopped_at: 05-02 Task 1 committed (a5f7b6b); Task 2 blocked on unmet precondition (see blockers)
+last_updated: "2026-09-21T13:38:15.414Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
 progress:
@@ -113,6 +113,7 @@ None yet.
 - [Research flag] Phase 2: Auth/session portability across localhost vs. staging (storageState reuse) is only loosely documented — worth validating early in Phase 2 planning/discussion.
 - [Research flag] Phase 3: No authoritative pattern exists for code-aware discovery scripts across Next.js App Router vs. Pages Router — validate against at least two of the three target repos (DATAX, dotax, franquix) before considering Phase 3 done.
 - [Research flag] Phase 1: Concrete destructive-action classification list (exact taxonomy of what requires confirmation) needs to be defined during Phase 1 planning, not left implicit.
+- [Phase 5] 05-02 Task 2 blocked: QA_AGENT_TOKEN missing from dotax's and franquix's .env.local (dotax has no .env.local at all; franquix's carries no QA_AGENT_TOKEN line), and the plan-executor runtime that ran Task 1 holds neither AskUserQuestion nor the Playwright MCP tools Task 2's live-dispatch/confirmation protocol requires -- see 05-CROSS-PROJECT-VALIDATION.md 'Task 2 -- precondition check' for full detail. Resolution: configure QA_AGENT_TOKEN in both projects' .env.local, then resume Task 2 from an agent context holding those tools (the installed /qa-agent skill invocation itself).
 
 ## Deferred Items
 
@@ -124,6 +125,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-21T13:31:42.726Z
-Stopped at: Completed 05-01-PLAN.md
-Resume file: None
+Last session: 2026-09-21T13:38:15.400Z
+Stopped at: 05-02 Task 1 committed (a5f7b6b); Task 2 blocked on unmet precondition (see blockers)
+Resume file: .planning/phases/05-smoke-test-mode-cross-project-distribution/05-02-PLAN.md
