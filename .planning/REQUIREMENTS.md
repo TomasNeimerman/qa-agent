@@ -38,12 +38,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **REP-01**: El agente produce un reporte legible que indica qué se probó, qué pasó/falló y por qué, con evidencia adjunta por caso
 - [x] **REP-02**: El reporte incluye pasos de reproducción para cada caso fallido
-- [x] **REP-03**: El agente soporta un modo "smoke test" que corre solo los flujos esenciales de forma rápida, en vez de una regresión completa
+- [ ] **REP-03**: El agente soporta un modo "smoke test" que corre solo los flujos esenciales de forma rápida, en vez de una regresión completa
 
 ### Packaging
 
 - [x] **PKG-01**: El agente está empaquetado como skill de Claude Code instalable (`~/.claude/skills/`), invocable vía slash command
-- [x] **PKG-02**: El skill funciona de forma agnóstica sobre cualquier proyecto (sin configuración específica previa), asumiendo stacks tipo Next.js/Supabase
+- [ ] **PKG-02**: El skill funciona de forma agnóstica sobre cualquier proyecto (sin configuración específica previa), asumiendo stacks tipo Next.js/Supabase
 - [ ] **PKG-03**: El skill es distribuible al equipo de trabajo (copiar/instalar en la carpeta de skills de cada persona)
 
 ## v2 Requirements
@@ -97,9 +97,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISC-05 | Phase 4 | Complete |
 | REP-01 | Phase 1 | Complete |
 | REP-02 | Phase 1 | Complete |
-| REP-03 | Phase 5 | Complete |
+| REP-03 | Phase 5 | Gaps Found |
 | PKG-01 | Phase 1 | Complete |
-| PKG-02 | Phase 5 | Complete |
+| PKG-02 | Phase 5 | Gaps Found |
 | PKG-03 | Phase 5 | Pending |
 
 **Coverage:**
