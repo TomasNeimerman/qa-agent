@@ -1,39 +1,36 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 05
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 05 complete — all phases complete
-last_updated: "2026-09-21T17:48:22.429Z"
+last_updated: "2026-09-21T18:30:07.565Z"
 last_activity: 2026-09-21
-last_activity_desc: Phase 05 complete
-state_head: b8a5fed7628ad984ff4ec855a6eb89a03c48b61f
+last_activity_desc: Milestone v1.0 completed and archived
+state_head: 9ec69e233aa6f8af7f50982749aaa38c9fa191c6
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 21
   completed_plans: 21
-  percent: 100
 milestone_name: milestone
+current_phase: 05
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-10)
+See: .planning/PROJECT.md (updated 2026-09-21)
 
 **Core value:** Eliminar la repetición manual de pruebas de regresión y validación de formularios: el agente debe poder ejecutar (o generar) esas pruebas de forma confiable, sin que un humano tenga que reproducirlas a mano cada vez.
-**Current focus:** Phase 05 — smoke-test-mode-cross-project-distribution
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-09-21 — Phase 05 complete
-
-Progress: [██████████] 100%
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-09-21 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -130,10 +127,16 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| uat_gaps | Phase 02: 02-UAT.md [partial], 0 escenarios pendientes | acknowledged | v1.0 |
+| deferred_items | Phase 03: tests `ui-login.test.mjs` fallan (config-error) | acknowledged | v1.0 |
+| deferred_items | Phase 03: tests de config fallan por `.env.local` local | acknowledged | v1.0 |
 
 ## Session Continuity
 
 Last session: 2026-09-21T16:39:02.694Z
 Stopped at: Phase 05 complete — all phases complete
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

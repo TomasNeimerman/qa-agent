@@ -4,6 +4,10 @@ phase: 02-browser-execution-engine
 source: [02-VERIFICATION.md]
 started: 2026-08-12T20:30:00-03:00
 updated: 2026-08-20T12:00:00-03:00
+audit_acknowledged:
+  milestone: v1.0
+  at: 2026-09-21
+  gap_snapshot: "partial::scenarios=0"
 ---
 
 ## Current Test
@@ -13,6 +17,7 @@ updated: 2026-08-20T12:00:00-03:00
 ## Tests
 
 ### 1. Live natural-language browser run against a real target app
+
 expected: |
   Install the skill in a live Claude Code session with Playwright MCP registered (per
   references/mcp-setup.md). Point it at a real running local or staging app with a login
@@ -27,6 +32,7 @@ root_cause: "N/A — resolved by restarting the Claude Code session so the newly
 missing: []
 
 ### 2. Live PreToolUse hook firing for a destructive UI click
+
 expected: |
   In the same or a separate live session, drive the agent toward a button labelled with a
   D-06 keyword (e.g. "Eliminar") and observe both (a) whether the orchestrator's own

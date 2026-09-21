@@ -12,25 +12,34 @@ Eliminar la repetición manual de pruebas de regresión y validación de formula
 
 ### Validated
 
-- [x] Validación de formularios: cobertura sistemática de campos requeridos, formatos inválidos y límites — Validado en Fase 4 (DISC-04)
-- [x] Casos edge/negativos: generación y ejecución de casos límite (permisos/auth vía credencial secundaria opcional; datos fuera de rango, tipos incorrectos) — Validado en Fase 4 (DISC-05)
+- ✓ Testing de UI web: navegar la app, interactuar con formularios/flujos y verificar comportamiento esperado — v1.0 (Fase 2)
+- ✓ Testing de API/backend: endpoints, contratos, respuestas y códigos de error — v1.0 (Fase 1)
+- ✓ Generación de casos de prueba documentados (incluyendo edge y negativos) — v1.0 (Fases 3-4)
+- ✓ Descubrimiento dual: exploración de código + instrucciones en lenguaje natural — v1.0 (Fase 3)
+- ✓ Validación de formularios: campos requeridos, formatos inválidos y límites — v1.0 (DISC-04)
+- ✓ Casos edge/negativos, incluidos permisos/auth vía credencial secundaria opcional — v1.0 (DISC-05)
+- ✓ Smoke test post-deploy (`--smoke`, un caso positivo por superficie) — v1.0 (Fase 5)
+- ✓ Reporte legible con evidencia y pasos de reproducción — v1.0 (Fase 1)
+- ✓ Acceso dual localhost / staging — v1.0 (Fase 1)
+- ✓ Empaquetado como skill instalable y agnóstico al proyecto — v1.0 (Fases 1, 5)
 
 ### Active
 
-- [ ] Testing de UI web: navegar la app, interactuar con formularios/flujos y verificar comportamiento esperado
-- [ ] Testing de API/backend: probar endpoints, validar contratos, respuestas y códigos de error
-- [ ] Generación de casos de prueba: a partir de un flujo o requisito, producir casos de prueba documentados (incluyendo edge cases y casos negativos)
-- [ ] Descubrimiento dual: el agente puede explorar el código del proyecto para inferir qué probar, y también aceptar instrucciones puntuales en lenguaje natural ("probá el alta de cliente")
-- [ ] Smoke test post-deploy: chequeo rápido de flujos esenciales tras un deploy
-- [ ] Reporte de resultados: resumen legible de qué se probó, qué pasó, qué falló y por qué
-- [ ] Soporte de acceso dual: puede correr contra la app en local (localhost) o contra un ambiente de staging/test vía URL
-- [ ] Empaquetado como skill instalable (`~/.claude/skills/`), invocable vía slash command, distribuible al equipo
+(Ninguno — definir con `/gsd-new-milestone`)
 
 ### Out of Scope
 
 - Ejecución automática disparada por CI/CD o pre-release obligatorio — v1 es 100% bajo demanda, manual
 - Multi-tenancy o control de acceso entre usuarios del equipo — el acceso se comparte informalmente por ahora
 - Generación de código de test reutilizable en el repo (Playwright/pytest files) — v1 se enfoca en reportes y casos documentados, no en dejar suites de test versionadas
+
+## Current State
+
+v1.0 MVP publicado el 2026-09-21: 5 fases, 21 planes, ~30k líneas (scripts .mjs, SKILL.md y docs). Validado en vivo contra franquix; DATAX-web no se re-ejecutó y dotax quedó fuera de la corrida en vivo. Deuda conocida: 2 tests de configuración (`api-client`, `ui-login`) fallan cuando existe un `.env.local` local; UAT de Fase 02 quedó `partial` (0 escenarios pendientes); Fase 5 quedó marcada `stale` en la verificación (VERIFICATION.md `passed 17/17`, commits de UAT posteriores).
+
+## Next Milestone Goals
+
+A definir con `/gsd-new-milestone`. Candidatos surgidos del Out of Scope: código de test persistido, ejecución en CI, self-healing entre corridas.
 
 ## Context
 
@@ -48,9 +57,9 @@ Eliminar la repetición manual de pruebas de regresión y validación de formula
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Implementarlo como skill de Claude Code (no CLI standalone ni servidor MCP) | Se integra directamente al flujo de trabajo diario del equipo en Claude Code, sin infraestructura adicional | — Pending |
-| Descubrimiento híbrido (explora código + acepta instrucciones en lenguaje natural) | Cubre tanto testing exploratorio automático como casos puntuales que el usuario ya tiene en mente | — Pending |
-| v1 entrega reportes y casos documentados, no código de test versionado | Reduce alcance inicial; generar suites reutilizables de test queda para una iteración futura | — Pending |
+| Implementarlo como skill de Claude Code (no CLI standalone ni servidor MCP) | Se integra directamente al flujo de trabajo diario del equipo en Claude Code, sin infraestructura adicional | ✓ Good (v1.0 entregó los tres) |
+| Descubrimiento híbrido (explora código + acepta instrucciones en lenguaje natural) | Cubre tanto testing exploratorio automático como casos puntuales que el usuario ya tiene en mente | ✓ Good (v1.0 entregó los tres) |
+| v1 entrega reportes y casos documentados, no código de test versionado | Reduce alcance inicial; generar suites reutilizables de test queda para una iteración futura | ✓ Good (v1.0 entregó los tres) |
 
 ## Evolution
 
@@ -70,4 +79,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-18 — Phase 4 (Edge-Case & Input Validation Quality) complete*
+*Last updated: 2026-09-21 after v1.0 milestone*

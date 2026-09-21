@@ -18,6 +18,7 @@ task's changes).
   was introduced here.
 - **Action:** Not fixed — out of scope for this plan. Left for whichever
   future phase/plan owns `ui-login.mjs`'s test suite.
+  status: acknowledged
 
 ## 03-03 Task 1: Pre-existing config-error test failures caused by a local `.env.local` (unrelated to this plan)
 
@@ -44,3 +45,4 @@ task's changes).
 - **Action:** Not fixed — out of scope for this plan and outside the
   `<files>` this task is permitted to touch. Flagged here so the phase gate
   doesn't mistake it for a regression caused by Task 1.
+  status: acknowledged
