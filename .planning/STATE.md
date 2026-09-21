@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 5
-current_phase_name: Smoke-Test Mode & Cross-Project Distribution
-status: planning
-stopped_at: Phase 5 context gathered
-last_updated: "2026-09-18T15:46:11.868Z"
-last_activity: 2026-09-18
-last_activity_desc: Phase 04 complete, transitioned to Phase 5
+current_phase: 05
+current_phase_name: smoke-test-mode-cross-project-distribution
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-09-21T13:31:42.739Z"
+last_activity: 2026-09-21
+last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 20
+  completed_plans: 18
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-10)
 
 **Core value:** Eliminar la repetición manual de pruebas de regresión y validación de formularios: el agente debe poder ejecutar (o generar) esas pruebas de forma confiable, sin que un humano tenga que reproducirlas a mano cada vez.
-**Current focus:** Phase 04 — edge-case-input-validation-quality
+**Current focus:** Phase 05 — smoke-test-mode-cross-project-distribution
 
 ## Current Position
 
-Phase: 5 — Smoke-Test Mode & Cross-Project Distribution
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-18 — Phase 04 complete, transitioned to Phase 5
+Phase: 05 (smoke-test-mode-cross-project-distribution) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-09-21 — Phase 05 execution started
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [██████████] 100%
 | Phase 3 P3 | 48min | 3 tasks | 9 files |
 | Phase 04 P04 | ~20min | 3 tasks | 3 files |
 | Phase 04 P06 | ~45min | 3 tasks | 2 files |
+| Phase 05 P01 | 30min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 4] 04-06: Permission-case group (Task 1) placed between Tipo and the D-09/D-10 boundary bullet, type/range group (Task 2) placed immediately after the boundary bullet — both land before coverage-honesty, satisfying both tasks' placement instructions at once
 - [Phase ?]: [Phase 4] 04-06: Pending-case dispatch refusal keys on the pendiente boolean field test-case-doc.mjs's --case JSON exposes (confirmed by reading the committed reader), not on raw Ejecución text
 - [Phase ?]: [Phase 4] 04-06: 04-04's pending shape already carries the layer as its own prefix, so the protocol states that fact rather than adding a new title requirement for the layer
+- [Phase ?]: [Phase 5] 05-01: selectSmokeCases lives inside test-case-doc.mjs (not a new sibling script) — mirrors the existing findCase/validateTestCasesDoc export pattern, no new CLI scaffolding needed
+- [Phase ?]: [Phase 5] 05-01: skipped-surface entries use a surface key (mirroring selected's own surface property), not heading, per the plan's acceptance_criteria wording
+- [Phase ?]: [Phase 5] 05-01: --smoke combined with --case exits 2 (configuration conflict, like api-client.mjs's --secondary/--storage-state refusal), not 9
 
 ### Pending Todos
 
@@ -120,6 +124,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-18T15:46:11.852Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-smoke-test-mode-cross-project-distribution/05-CONTEXT.md
+Last session: 2026-09-21T13:31:42.726Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
