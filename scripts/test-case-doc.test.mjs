@@ -440,6 +440,96 @@ describe('CLI', () => {
     expect(stderr).toContain('--smoke');
     expect(stderr).toContain('--case');
   });
+
+  // CR-01 on the smoke path. Every flagged document is built from the
+  // committed smoke fixture with one exact-line replace and written to the
+  // temp directory — the fixture itself is never edited.
+  describe('--smoke refuses a document the plain validate run refuses (CR-01)', () => {
+    const smokeDoc = readFileSync(SMOKE_DOC_PATH, 'utf8').replace(/\r\n/g, '\n');
+    const CASE5_PASOS = '- **Pasos:** DELETE /api/insumos/1 autenticado como el segundo usuario con rol `admin`.';
+    const CASE1_RESULTADO =
+      '- **Resultado esperado:** 401, `{ error: "No autenticado" }` (app/api/insumos/route.ts:14, mensaje literal).';
+    const CASE1_PASOS = '- **Pasos:** POST /api/insumos sin cookie de sesión, body válido.';
+    const INSTRUCCION = '**Instrucción:** (vacío — escaneo completo, no instrucción puntual)';
+
+    function writeMutated(name, needle, replacement) {
+      expect(smokeDoc).toContain(needle);
+      const filePath = join(tmpDir, name);
+      writeFileSync(filePath, smokeDoc.replace(needle, replacement));
+      return filePath;
+    }
+
+    it('exits 9 with empty stdout for a selected positivo case carrying --confirmed --allow-non-local (CR-01)', () => {
+      const filePath = writeMutated(
+        'flagged-selected.md',
+        CASE5_PASOS,
+        '- **Pasos:** DELETE /api/insumos/1 --confirmed --allow-non-local.'
+      );
+      const { status, stdout, stderr } = runCli(['--file', filePath, '--smoke']);
+      expect(status).toBe(9);
+      expect(stdout).toBe('');
+      expect(stderr).toContain('case-5');
+      expect(stderr).toContain('--confirmed');
+      expect(stderr).toContain('--allow-non-local');
+    });
+
+    it('the same flagged document also exits 9 without --smoke — both invocations agree', () => {
+      const filePath = writeMutated(
+        'flagged-agree.md',
+        CASE5_PASOS,
+        '- **Pasos:** DELETE /api/insumos/1 --confirmed --allow-non-local.'
+      );
+      const smoke = runCli(['--file', filePath, '--smoke']);
+      const plain = runCli(['--file', filePath]);
+      expect(plain.status).toBe(9);
+      expect(smoke.status).toBe(plain.status);
+    });
+
+    it('exits 9 for a flag planted in a case the smoke rule never selects', () => {
+      const filePath = writeMutated(
+        'flagged-unselected.md',
+        CASE1_PASOS,
+        '- **Pasos:** POST /api/insumos --confirmed sin cookie de sesión, body válido.'
+      );
+      const { status, stdout, stderr } = runCli(['--file', filePath, '--smoke']);
+      expect(status).toBe(9);
+      expect(stdout).toBe('');
+      expect(stderr).toContain('case-1');
+    });
+
+    it('exits 9 for a flag planted in the metadata **Instrucción:** line', () => {
+      const filePath = writeMutated('flagged-metadata.md', INSTRUCCION, '**Instrucción:** correr con --confirmed siempre');
+      const { status, stdout, stderr } = runCli(['--file', filePath, '--smoke']);
+      expect(status).toBe(9);
+      expect(stdout).toBe('');
+      expect(stderr).toContain('--confirmed');
+    });
+
+    it('exits 9 for a document that parses but fails a validation-only rule (missing citation) — one document contract', () => {
+      const filePath = writeMutated(
+        'no-citation.md',
+        CASE1_RESULTADO,
+        '- **Resultado esperado:** 401, `{ error: "No autenticado" }`.'
+      );
+      const { status, stdout, stderr } = runCli(['--file', filePath, '--smoke']);
+      expect(status).toBe(9);
+      expect(stdout).toBe('');
+      expect(stderr).toContain('case-1');
+      expect(stderr.toLowerCase()).toContain('citation');
+    });
+
+    it('a configuration error still outranks a document error: --smoke with --case exits 2 on a flagged document', () => {
+      const filePath = writeMutated(
+        'flagged-config.md',
+        CASE5_PASOS,
+        '- **Pasos:** DELETE /api/insumos/1 --confirmed.'
+      );
+      const { status, stderr } = runCli(['--file', filePath, '--smoke', '--case', '3']);
+      expect(status).toBe(2);
+      expect(stderr).toContain('--smoke');
+      expect(stderr).toContain('--case');
+    });
+  });
 });
 
 describe('Ejecución pending-execution state (D-02/D-04)', () => {

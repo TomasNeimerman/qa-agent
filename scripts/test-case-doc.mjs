@@ -26,7 +26,16 @@
 //       out-of-set Tipo/Ejecución, a duplicate or gapped ID, a missing
 //       citation, or a forbidden dispatch flag) — the full error list is
 //       written to stderr before any case from it is acted on; a --smoke
-//       selection over the same malformed document exits the same way
+//       selection over the same malformed document exits the same way. The
+//       --smoke branch validates the WHOLE document first, so a forbidden
+//       dispatch flag anywhere in it (a case block, a surface heading or the
+//       metadata block) exits 9 before any case is selected. Consequence: a
+//       document that parses but fails a validation-only rule (e.g. a missing
+//       citation) now exits 9 through --smoke where it once exited 0 — the
+//       smoke and plain-validate paths read one document contract. The gate
+//       exists because SKILL.md's Smoke-test protocol enters "Running
+//       generated cases" at its step 4, so that section's step-3 per-case
+//       scan never runs on this path (CR-01)
 // Codes 3-8 keep the meanings scripts/api-client.mjs and
 // scripts/discover-schema.mjs already assigned them and are never reused
 // here.
@@ -442,7 +451,11 @@ export function findCase(markdown, caseId) {
  * named in `skipped` — an empty selection is a fact to report, not a
  * failure. Structural document problems are already `parseTestCasesDoc`'s
  * `TestCaseFormatError` and stay there; this function introduces no new
- * failure mode.
+ * failure mode. The forbidden-dispatch-flag guarantee lives in the CLI's
+ * `--smoke` branch, which validates the whole document (the
+ * `FORBIDDEN_DISPATCH_FLAGS` scan included) before this function is ever
+ * called — a future caller that bypasses the CLI inherits nothing and has to
+ * run `validateTestCasesDoc` itself.
  *
  * Performs no file I/O of its own and mutates nothing on the object it is
  * handed — every returned case is a fresh object built from the input
@@ -743,6 +756,18 @@ async function main() {
   }
 
   if (smokeRequested) {
+    // CR-01 gate: validate the whole document before anything is selected.
+    // The Smoke-test protocol hands the set to "Running generated cases" at
+    // its step 4, so that section's step-3 per-case scan never runs on this
+    // path — this is the only place a FORBIDDEN_DISPATCH_FLAGS literal (in a
+    // case, a surface heading or the metadata block) can be refused before
+    // dispatch. Same stderr rendering and exit code as the plain validate run.
+    const validation = validateTestCasesDoc(markdown);
+    if (!validation.valid) {
+      process.stderr.write(`${validation.errors.join('\n')}\n`);
+      process.exit(9);
+      return;
+    }
     try {
       const parsed = parseTestCasesDoc(markdown);
       const result = selectSmokeCases(parsed);
