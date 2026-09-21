@@ -34,17 +34,46 @@ the auth token redacted everywhere — into the target project's own
 
 ## Installation
 
-Copy or symlink this directory to `~/.claude/skills/qa-agent/`, then run
-`npm install` inside it **once**. Nothing is installed into, or written to,
-the project under test besides the `qa-reports/` run artifacts this skill
-produces at run time — there is no project-specific setup step (PKG-01).
+Five steps, in order, once per machine. Nothing here repeats per target
+project (PKG-01).
 
-A browser run additionally needs the Playwright MCP server registered once
-— see `references/mcp-setup.md` for the verified one-time setup procedure
-(the exact flags and the two registration paths, user-scope or
-project-scope). An API-only run needs none of this.
+1. **Copy or symlink this directory to `~/.claude/skills/qa-agent/`.**
+   Either mechanism works — a plain copy, or a symlink (on Windows, a
+   directory junction, e.g. `mklink /J`). `isMainModule` in
+   `scripts/api-client.mjs` and `scripts/test-case-doc.mjs` resolves
+   realpaths precisely, so the junction install runs identically to a
+   plain copy.
+2. **Run `npm install` inside the copied skill folder, once** — not in the
+   project under test, which this step names explicitly because the
+   distinction is easy to miss. Requires Node `>=22` (`package.json`'s
+   `engines` field). This is a manual step by design: dependencies are
+   never vendored or pre-bundled, and one command keeps the copy light.
+3. **Set the environment variables `## Configuration` below lists.** See
+   that section for which variables a given run actually needs — do not
+   duplicate its list here.
+4. **For a browser run only, register the Playwright MCP server once per
+   machine.** See `references/mcp-setup.md` for the exact command and the
+   two registration scopes — that file, not this one, is where the
+   procedure is written. An API-only run needs none of this.
+5. **Invoke the skill** through its slash command with a base URL and an
+   instruction, in the shape `argument-hint` publishes above:
+   `/qa-agent <base-url> <instruction>`.
+
+Nothing is installed into, or written to, the project under test besides
+the `qa-reports/` run artifacts this skill produces at run time — there is
+no project-specific setup step (PKG-01). The skill is invoked from a
+Claude Code session opened on the target project; nothing beyond the five
+steps above is needed per project.
 
 ## Configuration
+
+A first, API-only run needs only `QA_AGENT_TOKEN` below (`QA_AGENT_BASE_URL`
+is optional — it just saves passing a base URL on every invocation).
+`QA_AGENT_UI_USER`/`QA_AGENT_UI_PASSWORD` are needed only once a run drives
+the browser, and `QA_AGENT_TOKEN_SECONDARY` is needed only to make a
+permission/edge case runnable instead of pending. The four variable names
+and the sections they live in below are unchanged by this distinction —
+this paragraph only states which run needs which.
 
 - `QA_AGENT_TOKEN` (required for API-only runs) — the test user's bearer
   token, exported in the shell that launched Claude Code, or set in the
