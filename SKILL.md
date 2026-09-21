@@ -1,6 +1,6 @@
 ---
 name: qa-agent
-description: Run an evidence-backed API/UI test, or discover a target project's own code to generate documented test cases. Use when asked to test, probar, validar, or run QA against API endpoints or UI flows (e.g. "probá GET /api/clients", "testeá el CRUD de facturas", "validá el endpoint de login"), or to discover/generate test cases from a project's code (e.g. "generá casos de prueba", "explorá el proyecto", "qué se puede testear en este repo").
+description: Run an evidence-backed API/UI test, discover a target project's own code to generate documented test cases, or run a fast post-deploy smoke check. Use when asked to test, probar, validar, or run QA against API endpoints or UI flows (e.g. "probá GET /api/clients", "testeá el CRUD de facturas", "validá el endpoint de login"), to discover/generate test cases from a project's code (e.g. "generá casos de prueba", "explorá el proyecto", "qué se puede testear en este repo"), or to run a smoke test (e.g. "corré un smoke test", "hacé un chequeo rápido post-deploy").
 argument-hint: [base-url|project-path] [instruction]
 # allowed-tools deliberately excludes any JavaScript-evaluation tool (e.g.
 # browser_evaluate) — an arbitrary-script capability would let a stuck flow
@@ -108,7 +108,7 @@ reads one table, not two:
 | 6 | Production-looking target refused — pass `--allow-non-local` to proceed (never a permanent ban, D-02) |
 | 7 | Login failed (`ui-login.mjs` only) — the login form was found but the supplied `QA_AGENT_UI_USER` was rejected, or no post-login state change occurred; no storage-state file is written |
 | 8 | Refused — a resolved path (`--project-root`/`--migrations-dir`, or a file inside the migrations directory) fell outside the target project root (`discover-schema.mjs` only) |
-| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse or validate back after being written, or a case named when running generated cases (see the section below `## Case generation protocol`) could not be resolved (`scripts/test-case-doc.mjs --file <path> [--case <id>]`; stderr names every offending case ID) |
+| 9 | Malformed test-case document — `qa-reports/<run-id>-test-cases.md` failed to parse or validate back after being written, or a case named when running generated cases (see the section below `## Case generation protocol`) could not be resolved (`scripts/test-case-doc.mjs --file <path> [--case <id>] [--smoke]`; stderr names every offending case ID) — the same code covers a `--smoke` selection over a malformed document (`## Smoke-test protocol`) |
 
 ## UI authentication and session reuse
 
@@ -625,6 +625,69 @@ for its own invocation. A run that begins because the developer accepted
 `## Case generation protocol`'s run offer (D-07) is an ordinary run of
 this section from step 1, with the same confirmation gates, and it is a
 new turn.
+
+## Smoke-test protocol
+
+A fast post-deploy check that runs only the essential flows instead of a
+full regression pass (REP-03). This adds no new execution mechanism: it
+resolves a deterministic subset of an existing test-cases document and
+hands that subset to `## Running generated cases` unchanged.
+
+1. **Trigger.** A natural-language instruction — "corré un smoke test",
+   "hacé un chequeo rápido post-deploy" — is what starts this protocol.
+   There is deliberately no CLI flag and no extra slash-command argument
+   for it (D-06): the invocation style stays the same
+   `[base-url|project-path] [instruction]` `argument-hint` already
+   publishes, and a smoke request is recognised from the instruction text
+   alone, the same way every other instruction to this skill is.
+2. **No-document branch.** When the target project has no
+   `qa-reports/<run-id>-test-cases.md` yet, run `## Discovery protocol`
+   and `## Case generation protocol` unchanged (D-03) — one discovery
+   path, not two; a separate, smaller ad-hoc case set is never generated
+   for a smoke request. Stop at that protocol's own terminal step and
+   make the run offer naming the smoke count, with the pending count named
+   separately from the runnable count. This does not weaken the Phase 3
+   terminal-step rule that generating a document never runs a case in the
+   same invocation (D-10) — it resolves the apparent tension additively,
+   the same way 01-03 resolved its own ordering tension: both rules keep
+   holding, neither is weakened. A developer who answers yes to the run
+   offer starts a new turn that re-enters this protocol at step 3.
+3. **Re-read rule.** Re-read the test-cases document from disk at this
+   moment, never a version remembered from earlier in the conversation —
+   the same reason `## Running generated cases` step 2 already gives.
+   Nothing is ever written back into the document to mark a case as
+   smoke (D-04): the set is recomputed every time, so a developer who
+   reorders or edits the document changes what a later smoke run picks,
+   and that is the intended behaviour, not a bug.
+4. **Selection.** Resolve the smoke set by invoking
+   `node <skill-dir>/scripts/test-case-doc.mjs --file <path> --smoke`
+   through the Bash tool, and read its JSON (D-01, D-02). The rule the
+   script applies is one case per `##` surface — the first `positivo`
+   case listed under it. The orchestrator never re-derives that rule by
+   eye, for the same reason `## Running generated cases` step 3 already
+   forbids grepping the document and reading the matched heading by eye.
+5. **Honest summary, before dispatch.** Report, in chat, how many
+   surfaces the document has, how many of them contributed a case, every
+   surface named in the result's `skipped` array, and `counts.pendientes`
+   named separately from the runnable count. A smoke run is a subset, and
+   its result is never reported as project health or as regression
+   coverage — the same discipline `## Case generation protocol`'s
+   coverage-honesty bullet already applies to generation; a "smoke
+   passed" that silently covered three of four surfaces would be exactly
+   the false guarantee that bullet exists to prevent.
+6. **Handoff.** Dispatch the selected set through `## Running generated
+   cases` steps 4-6, unchanged (D-07) — the same pending-first refusal,
+   the same `API` and `UI` branches, the same confirmation gates in
+   `## Confirmation protocol`/`## UI confirmation protocol`, and the same
+   `format-report.mjs` rendering into the same `qa-reports/` location.
+   Speed is never a reason to batch approvals or to reach for a
+   pre-approval flag — a smoke case whose steps describe a destructive
+   action stops and asks about that one call exactly as any other case
+   does. A production-looking target is still refused by
+   `api-client.mjs`'s exit-6 gate, and `--allow-non-local` is added only
+   after the developer confirms in that moment, exactly as `## Case
+   construction` already requires. There is no separate smoke report
+   format and no distinguishing report header.
 
 ## Case construction
 
