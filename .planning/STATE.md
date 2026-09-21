@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 05
 current_phase_name: smoke-test-mode-cross-project-distribution
-status: executing
-stopped_at: Completed 05-03-PLAN.md (Installation/mcp-setup wording tightened + clean-directory rehearsal); PKG-03 stays open pending D-12 teammate dry run
-last_updated: "2026-09-21T13:54:45.953Z"
+status: verifying
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-09-21T15:41:54.460Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 
 Phase: 05 (smoke-test-mode-cross-project-distribution) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-21 — Phase 05 execution started
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [██████████] 95%
 | Phase 04 P06 | ~45min | 3 tasks | 2 files |
 | Phase 05 P01 | 30min | 2 tasks | 4 files |
 | Phase 05 P03 | 35min | 2 tasks | 2 files |
+| Phase 05 P02 | ~2h | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5] 05-03: Configuration ambiguity resolved with a one-paragraph run-type preamble rather than restructuring the bullet list or exit-code table, keeping 'no variable moved between sections' and 'no exit-code table restructuring beyond 05-01' intact
 - [Phase ?]: [Phase 5] 05-03: references/mcp-setup.md's two registration scopes made explicit alternatives via one linking sentence before the existing headings, not a new heading -- heading set stays unchanged
 - [Phase ?]: [Phase 5] 05-03: clean-directory rehearsal proves mechanical sufficiency only, not D-12's teammate dry run -- PKG-03 stays open, logged as WINDOWS.md unrun-verify entry #1
+- [Phase ?]: [Phase 5] 05-02: Task 2 closed on franquix live evidence only (user decision); DATAX-web not re-run, dotax descoped (no fixed environment), neither counted as failed
 
 ### Pending Todos
 
@@ -117,7 +119,6 @@ None yet.
 - [Research flag] Phase 2: Auth/session portability across localhost vs. staging (storageState reuse) is only loosely documented — worth validating early in Phase 2 planning/discussion.
 - [Research flag] Phase 3: No authoritative pattern exists for code-aware discovery scripts across Next.js App Router vs. Pages Router — validate against at least two of the three target repos (DATAX, dotax, franquix) before considering Phase 3 done.
 - [Research flag] Phase 1: Concrete destructive-action classification list (exact taxonomy of what requires confirmation) needs to be defined during Phase 1 planning, not left implicit.
-- [Phase 5] 05-02 Task 2 blocked: QA_AGENT_TOKEN missing from dotax's and franquix's .env.local (dotax has no .env.local at all; franquix's carries no QA_AGENT_TOKEN line), and the plan-executor runtime that ran Task 1 holds neither AskUserQuestion nor the Playwright MCP tools Task 2's live-dispatch/confirmation protocol requires -- see 05-CROSS-PROJECT-VALIDATION.md 'Task 2 -- precondition check' for full detail. Resolution: configure QA_AGENT_TOKEN in both projects' .env.local, then resume Task 2 from an agent context holding those tools (the installed /qa-agent skill invocation itself).
 
 ## Deferred Items
 
@@ -129,6 +130,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-21T13:54:45.940Z
-Stopped at: Completed 05-03-PLAN.md (Installation/mcp-setup wording tightened + clean-directory rehearsal); PKG-03 stays open pending D-12 teammate dry run
+Last session: 2026-09-21T15:41:54.446Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None

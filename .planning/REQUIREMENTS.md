@@ -43,7 +43,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Packaging
 
 - [x] **PKG-01**: El agente está empaquetado como skill de Claude Code instalable (`~/.claude/skills/`), invocable vía slash command
-- [ ] **PKG-02**: El skill funciona de forma agnóstica sobre cualquier proyecto (sin configuración específica previa), asumiendo stacks tipo Next.js/Supabase
+- [x] **PKG-02**: El skill funciona de forma agnóstica sobre cualquier proyecto (sin configuración específica previa), asumiendo stacks tipo Next.js/Supabase
 - [ ] **PKG-03**: El skill es distribuible al equipo de trabajo (copiar/instalar en la carpeta de skills de cada persona)
 
 ## v2 Requirements
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REP-02 | Phase 1 | Complete |
 | REP-03 | Phase 5 | Complete |
 | PKG-01 | Phase 1 | Complete |
-| PKG-02 | Phase 5 | Pending |
+| PKG-02 | Phase 5 | Complete |
 | PKG-03 | Phase 5 | Pending |
 
 **Coverage:**
