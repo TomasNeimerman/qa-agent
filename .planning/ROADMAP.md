@@ -132,7 +132,17 @@ Plans:
   2. The skill runs unmodified against any of the team's existing projects (DATAX, dotax, franquix) without project-specific configuration (PKG-02).
   3. A teammate can install the skill by copying it into their own skills folder and immediately invoke it via slash command, with no setup beyond that (PKG-03).
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Tracer: a validated test-cases document becomes a deterministic one-positivo-per-surface smoke set, dispatched through the unchanged Run protocol (REP-03, D-01–D-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md — Cross-project validation: discovery, generation, selection and a live smoke run against DATAX-web, dotax and franquix (PKG-02, D-08, D-09, D-10)
+- [ ] 05-03-PLAN.md — Tightened installation and MCP-setup docs, proven by a clean-directory rehearsal (PKG-03, D-11, D-12, D-13)
 
 ## Progress
 
@@ -145,7 +155,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Browser Execution Engine | 4/4 | Complete    | 2026-08-20 |
 | 3. Dual Discovery & Test-Case Generation | 3/3 | Complete    | 2026-08-24 |
 | 4. Edge-Case & Input Validation Quality | 6/6 | Complete    | 2026-09-18 |
-| 5. Smoke-Test Mode & Cross-Project Distribution | 0/TBD | Not started | - |
+| 5. Smoke-Test Mode & Cross-Project Distribution | 0/3 | Not started | - |
 
 ---
 *Roadmap created: 2026-08-10*
