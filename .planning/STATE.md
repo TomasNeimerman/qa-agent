@@ -1,19 +1,20 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.0
-milestone_name: milestone
 current_phase: 05
 current_phase_name: smoke-test-mode-cross-project-distribution
 status: verifying
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-09-21T15:41:54.460Z"
+stopped_at: Completed 05-04-PLAN.md
+last_updated: "2026-09-21T16:39:02.996Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
+state_head: f56bc489baa78cd2a034e343c3880643472f0ab5
 progress:
   total_phases: 5
   completed_phases: 5
-  total_plans: 20
-  completed_plans: 20
+  total_plans: 21
+  completed_plans: 21
+milestone_name: milestone
 ---
 
 # Project State
@@ -72,6 +73,7 @@ Progress: [██████████] 100%
 | Phase 05 P01 | 30min | 2 tasks | 4 files |
 | Phase 05 P03 | 35min | 2 tasks | 2 files |
 | Phase 05 P02 | ~2h | 2 tasks | 2 files |
+| Phase 05 P04 | 12min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -109,6 +111,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 5] 05-03: references/mcp-setup.md's two registration scopes made explicit alternatives via one linking sentence before the existing headings, not a new heading -- heading set stays unchanged
 - [Phase ?]: [Phase 5] 05-03: clean-directory rehearsal proves mechanical sufficiency only, not D-12's teammate dry run -- PKG-03 stays open, logged as WINDOWS.md unrun-verify entry #1
 - [Phase ?]: [Phase 5] 05-02: Task 2 closed on franquix live evidence only (user decision); DATAX-web not re-run, dotax descoped (no fixed environment), neither counted as failed
+- [Phase 05]: 05-04: --smoke branch validates whole document (FORBIDDEN_DISPATCH_FLAGS included) before selection; smoke and plain-validate share one contract
 
 ### Pending Todos
 
@@ -130,6 +133,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-21T15:41:54.446Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-09-21T16:39:02.694Z
+Stopped at: Completed 05-04-PLAN.md
 Resume file: None

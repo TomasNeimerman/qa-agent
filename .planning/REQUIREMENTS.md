@@ -38,7 +38,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **REP-01**: El agente produce un reporte legible que indica qué se probó, qué pasó/falló y por qué, con evidencia adjunta por caso
 - [x] **REP-02**: El reporte incluye pasos de reproducción para cada caso fallido
-- [ ] **REP-03**: El agente soporta un modo "smoke test" que corre solo los flujos esenciales de forma rápida, en vez de una regresión completa
+- [x] **REP-03**: El agente soporta un modo "smoke test" que corre solo los flujos esenciales de forma rápida, en vez de una regresión completa
 
 ### Packaging
 
@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISC-05 | Phase 4 | Complete |
 | REP-01 | Phase 1 | Complete |
 | REP-02 | Phase 1 | Complete |
-| REP-03 | Phase 5 | Gaps Found |
+| REP-03 | Phase 5 | Complete |
 | PKG-01 | Phase 1 | Complete |
 | PKG-02 | Phase 5 | Gaps Found |
 | PKG-03 | Phase 5 | Pending |
