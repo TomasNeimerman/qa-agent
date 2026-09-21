@@ -132,7 +132,7 @@ Plans:
   2. The skill runs unmodified against any of the team's existing projects (DATAX, dotax, franquix) without project-specific configuration (PKG-02).
   3. A teammate can install the skill by copying it into their own skills folder and immediately invoke it via slash command, with no setup beyond that (PKG-03).
 
-**Plans**: 3 plans
+**Plans**: 4 plans (05-04 added by gap closure)
 
 Plans:
 **Wave 1**
@@ -143,6 +143,7 @@ Plans:
 
 - [ ] 05-02-PLAN.md — Cross-project validation: discovery, generation, selection and a live smoke run against DATAX-web, dotax and franquix (PKG-02, D-08, D-09, D-10)
 - [ ] 05-03-PLAN.md — Tightened installation and MCP-setup docs, proven by a clean-directory rehearsal (PKG-03, D-11, D-12, D-13)
+- [ ] 05-04-PLAN.md — Gap closure (CR-01): the `--smoke` branch validates the whole document, forbidden-dispatch-flag scan included, before it selects anything (REP-03)
 
 ## Progress
 
